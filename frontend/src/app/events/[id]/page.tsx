@@ -16,6 +16,7 @@ type Submission = {
   status: "pending" | "approved";
   address?: string;
   qrUrl?: string;
+  jsonUrl?: string;
 };
 
 export default function EventDetailPage({ params }: { params: { id: string } }) {
@@ -24,15 +25,17 @@ export default function EventDetailPage({ params }: { params: { id: string } }) 
   const event = events.find((e) => e.id === id);
   const { address } = useAccount();
   const [myStatus, setMyStatus] = useState<Submission["status"] | null>(null);
-  const [mySubmission, setMySubmission] = useState<Submission | null>(null);
+  const [mySub, setMySub] = useState<Submission | null>(null);
 
   useEffect(() => {
     const subs: Submission[] = JSON.parse(localStorage.getItem(SUBMIT_KEY(id)) || "[]");
     const mine = subs.filter((s) => s.address && s.address === address?.toLowerCase());
     const last = mine[mine.length - 1];
     setMyStatus(last?.status || null);
-    setMySubmission(last || null);
+    setMySub(last || null);
   }, [id, address]);
+
+  const isHost = event?.hostAddress && event.hostAddress === address?.toLowerCase();
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-12">
@@ -40,11 +43,18 @@ export default function EventDetailPage({ params }: { params: { id: string } }) 
         <Link href="/events" className="text-sm hover:underline">
           ← Back to events
         </Link>
-        {event?.approvalNeeded && event?.hostAddress && event?.hostAddress === address?.toLowerCase() && (
-          <Link href={`/events/${id}/review`} className="text-sm hover:underline">
-            Review registrations
-          </Link>
-        )}
+        <div className="flex items-center gap-4">
+          {event?.approvalNeeded && isHost && (
+            <Link href={`/events/${id}/review`} className="text-sm hover:underline">
+              Review registrations
+            </Link>
+          )}
+          {isHost && (
+            <Link href={`/events/${id}/edit`} className="text-sm hover:underline">
+              Edit
+            </Link>
+          )}
+        </div>
       </div>
 
       {!event ? (
@@ -73,19 +83,21 @@ export default function EventDetailPage({ params }: { params: { id: string } }) 
                 </span>
               )}
             </div>
-            <RegisterButton eventId={id} />
+            {/* Right side: either Register button, or QR/pending info if already registered */}
+            {myStatus ? (
+              myStatus === "approved" && mySub?.qrUrl ? (
+                <div className="rounded-md border border-black/10 dark:border-white/10 p-2 text-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={mySub.qrUrl} alt="Your QR" className="w-24 h-24 mx-auto" />
+                  <a href={mySub.qrUrl} target="_blank" rel="noreferrer" className="block text-xs mt-1 underline">View QR</a>
+                </div>
+              ) : (
+                <div className="text-xs text-yellow-500">Pending approval</div>
+              )
+            ) : (
+              <RegisterButton eventId={id} />
+            )}
           </header>
-
-          {mySubmission?.status === "approved" && mySubmission.qrUrl && (
-            <section>
-              <h2 className="text-lg font-medium mb-2">Your ticket QR</h2>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={mySubmission.qrUrl} alt="Ticket QR" className="w-40 h-40" />
-              <div className="mt-1">
-                <a className="text-sm underline" href={mySubmission.qrUrl} target="_blank" rel="noreferrer">{mySubmission.qrUrl}</a>
-              </div>
-            </section>
-          )}
 
           {event.eventDescription && (
             <section className="space-y-2">
