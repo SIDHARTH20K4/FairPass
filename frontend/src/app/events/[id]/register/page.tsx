@@ -3,9 +3,8 @@
 import { useEvents } from "@/hooks/useEvents";
 import { useState } from "react";
 import Link from "next/link";
-import { useAccount } from "wagmi";
+import { useAccount, useSignMessage } from "wagmi";
 import { uploadImageToIPFS, uploadJsonToIPFS } from "@/lib/ipfs";
-import { getWalletClient } from "wagmi/actions";
 
 const SUBMIT_KEY = (id: string) => `fairpass.events.submissions.${id}`;
 
@@ -25,7 +24,8 @@ export default function RegisterForEvent({ params }: { params: { id: string } })
   const { id } = params;
   const { events } = useEvents();
   const event = events.find((e) => e.id === id);
-  const { address } = useAccount();
+  const { address, isConnected } = useAccount();
+  const { signMessageAsync } = useSignMessage();
 
   const [values, setValues] = useState<Record<string, string>>({ name: "", dob: "", email: "", phone: "" });
   const [submitted, setSubmitted] = useState<Submission | null>(null);
@@ -42,12 +42,11 @@ export default function RegisterForEvent({ params }: { params: { id: string } })
   async function submit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!address) {
+    if (!isConnected || !address) {
       alert("Please connect your wallet to register.");
       return;
     }
 
-    // Prevent multiple registrations for the same wallet address
     const existing: Submission[] = JSON.parse(localStorage.getItem(SUBMIT_KEY(id)) || "[]");
     const already = existing.find((s) => s.address === address.toLowerCase());
     if (already) {
@@ -57,31 +56,42 @@ export default function RegisterForEvent({ params }: { params: { id: string } })
 
     setUploading(true);
     try {
-      const status: Submission["status"] = event.approvalNeeded ? "pending" : "approved";
+      const needsApproval = !!event.approvalNeeded;
+      const status: Submission["status"] = needsApproval ? "pending" : "approved";
       const payload = {
         eventId: id,
         eventName: event.name,
-        address: address?.toLowerCase(),
+        address: address.toLowerCase(),
         ...values,
         status,
         ts: Date.now(),
       };
 
-      const wallet = await getWalletClient();
       const message = JSON.stringify(payload);
-      const signature = await wallet?.signMessage({ message });
+      const signature = await signMessageAsync({ message });
 
-      const qrData = encodeURIComponent(JSON.stringify({ ...payload, signature }));
-      const qrUrlData = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrData}`;
-      const { url: qrImageUrl, cid: qrCid } = await uploadImageToIPFS(qrUrlData);
+      let qrImageUrl: string | undefined;
+      let qrCid: string | undefined;
+      let jsonUrl: string | undefined;
+      let jsonCid: string | undefined;
 
-      const { url: jsonUrl, cid: jsonCid } = await uploadJsonToIPFS({ ...payload, signature });
+      if (!needsApproval) {
+        const qrData = encodeURIComponent(JSON.stringify({ ...payload, signature }));
+        const qrUrlData = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrData}`;
+        const qrUpload = await uploadImageToIPFS(qrUrlData);
+        qrImageUrl = qrUpload.url;
+        qrCid = qrUpload.cid;
+
+        const jsonUpload = await uploadJsonToIPFS({ ...payload, signature });
+        jsonUrl = jsonUpload.url;
+        jsonCid = jsonUpload.cid;
+      }
 
       const entry: Submission = {
         values,
         at: Date.now(),
         status,
-        address: address?.toLowerCase(),
+        address: address.toLowerCase(),
         qrCid,
         qrUrl: qrImageUrl,
         jsonCid,
@@ -110,11 +120,11 @@ export default function RegisterForEvent({ params }: { params: { id: string } })
         <div className="rounded-md border border-black/10 dark:border-white/10 p-4 space-y-2">
           <p className="text-sm">Registration received.</p>
           {submitted.status === "pending" ? (
-            <p className="text-sm text-yellow-500">Approval pending.</p>
+            <p className="text-sm text-yellow-500">Approval pending. You'll receive your QR once approved.</p>
           ) : (
             <p className="text-sm text-green-500">You're approved!</p>
           )}
-          {submitted.qrUrl && (
+          {submitted.status === "approved" && submitted.qrUrl && (
             <div className="space-y-1">
               <p className="text-sm">Your QR (stored on IPFS):</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -122,7 +132,7 @@ export default function RegisterForEvent({ params }: { params: { id: string } })
               <a className="text-sm underline" href={submitted.qrUrl} target="_blank" rel="noreferrer">{submitted.qrUrl}</a>
             </div>
           )}
-          {submitted.jsonUrl && (
+          {submitted.status === "approved" && submitted.jsonUrl && (
             <div className="space-y-1">
               <p className="text-sm">Registration JSON (IPFS):</p>
               <a className="text-sm underline" href={submitted.jsonUrl} target="_blank" rel="noreferrer">{submitted.jsonUrl}</a>

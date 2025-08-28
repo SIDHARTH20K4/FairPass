@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEvents } from "@/hooks/useEvents";
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
+import { uploadImageToIPFS, uploadJsonToIPFS } from "@/lib/ipfs";
 
 const SUBMIT_KEY = (id: string) => `fairpass.events.submissions.${id}`;
 
@@ -12,6 +13,11 @@ type Submission = {
   at: number;
   status: "pending" | "approved";
   address?: string;
+  qrCid?: string;
+  qrUrl?: string;
+  jsonCid?: string;
+  jsonUrl?: string;
+  signature?: string;
 };
 
 export default function ReviewSubmissionsPage({ params }: { params: { id: string } }) {
@@ -44,8 +50,33 @@ export default function ReviewSubmissionsPage({ params }: { params: { id: string
     );
   }
 
-  function approve(index: number) {
-    const next = subs.map((s, i) => (i === index ? { ...s, status: "approved" } : s));
+  async function approve(index: number) {
+    const s = subs[index];
+    if (!s) return;
+
+    let qrUrl = s.qrUrl;
+    let qrCid = s.qrCid;
+    let jsonUrl = s.jsonUrl;
+    let jsonCid = s.jsonCid;
+
+    if (!qrUrl || !jsonUrl) {
+      const payload = {
+        eventId: id,
+        eventName: event.name,
+        address: s.address,
+        ...s.values,
+        status: "approved" as const,
+        ts: s.at,
+        signature: s.signature,
+      };
+      const qrData = encodeURIComponent(JSON.stringify(payload));
+      const qrUpload = await uploadImageToIPFS(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrData}`);
+      qrUrl = qrUpload.url; qrCid = qrUpload.cid;
+      const jsonUpload = await uploadJsonToIPFS(payload);
+      jsonUrl = jsonUpload.url; jsonCid = jsonUpload.cid;
+    }
+
+    const next = subs.map((item, i) => i === index ? { ...item, status: "approved", qrUrl, qrCid, jsonUrl, jsonCid } : item);
     setSubs(next);
     localStorage.setItem(SUBMIT_KEY(id), JSON.stringify(next));
   }
