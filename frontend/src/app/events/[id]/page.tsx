@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useEvents } from "@/hooks/useEvents";
 import Markdown from "@/components/Markdown";
 import { useEffect, useState } from "react";
+import React from "react";
 import { useAccount } from "wagmi";
 
 const SUBMIT_KEY = (id: string) => `fairpass.events.submissions.${id}`;
@@ -19,8 +20,8 @@ type Submission = {
   jsonUrl?: string;
 };
 
-export default function EventDetailPage({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = React.use(params);
   const { events } = useEvents();
   const event = events.find((e) => e.id === id);
   const { address } = useAccount();
