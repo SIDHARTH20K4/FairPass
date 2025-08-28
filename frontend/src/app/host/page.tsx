@@ -6,6 +6,11 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useRouter } from "next/navigation";
 import { useEvents } from "@/hooks/useEvents";
 import ImageDropzone from "@/components/ImageDropzone";
+import CustomDatePicker from "@/components/DatePicker";
+import CustomTimePicker from "@/components/TimePicker";
+import SimpleDatePicker from "@/components/SimpleDatePicker";
+import SimpleTimePicker from "@/components/SimpleTimePicker";
+import LocationMap from "@/components/LocationMap";
 import { uploadImageToIPFS } from "@/lib/ipfs";
 
 const LOCATIONS = [
@@ -170,31 +175,31 @@ export default function HostPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="block text-sm font-medium" htmlFor="date">Date</label>
-            <input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/20 dark:focus:ring-white/20" required />
+            <SimpleDatePicker 
+              value={date} 
+              onChange={setDate} 
+              label="Event Date" 
+              required 
+            />
           </div>
           <div className="space-y-2">
-            <label className="block text-sm font-medium" htmlFor="time">Time</label>
-            <input id="time" type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/20 dark:focus:ring-white/20" required />
+            <SimpleTimePicker 
+              value={time} 
+              onChange={setTime} 
+              label="Event Time" 
+              required 
+            />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium" htmlFor="lat">Latitude</label>
-            <input id="lat" type="text" value={lat} onChange={(e) => setLat(e.target.value)} className="w-full rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm" placeholder="e.g. 1.3521" />
-          </div>
-          <div className="space-y-2">
-            <label className="block text-sm font-medium" htmlFor="lng">Longitude</label>
-            <input id="lng" type="text" value={lng} onChange={(e) => setLng(e.target.value)} className="w-full rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm" placeholder="e.g. 103.8198" />
-          </div>
-        </div>
-
-        {(lat && lng) && (
-          <div className="rounded-md border border-black/10 dark:border-white/10 overflow-hidden">
-            <iframe title="map-preview" width="100%" height="240" loading="lazy" referrerPolicy="no-referrer-when-downgrade" src={`https://www.google.com/maps?q=${encodeURIComponent(lat+","+lng)}&output=embed`} />
-          </div>
-        )}
+        <LocationMap 
+          lat={lat ? Number(lat) : undefined}
+          lng={lng ? Number(lng) : undefined}
+          onLocationChange={(lat, lng) => {
+            setLat(lat.toString());
+            setLng(lng.toString());
+          }}
+        />
 
         <div className="space-y-2">
           <span className="block text-sm font-medium">Pricing</span>

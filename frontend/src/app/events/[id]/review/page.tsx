@@ -11,7 +11,7 @@ const SUBMIT_KEY = (id: string) => `fairpass.events.submissions.${id}`;
 type Submission = {
   values: Record<string, string>;
   at: number;
-  status: "pending" | "approved";
+  status: "pending" | "approved" | "rejected";
   address?: string;
   qrCid?: string;
   qrUrl?: string;
@@ -81,6 +81,18 @@ export default function ReviewSubmissionsPage({ params }: { params: { id: string
     localStorage.setItem(SUBMIT_KEY(id), JSON.stringify(next));
   }
 
+  function reject(index: number) {
+    const next = subs.map((item, i) => i === index ? { ...item, status: "rejected" } : item);
+    setSubs(next);
+    localStorage.setItem(SUBMIT_KEY(id), JSON.stringify(next));
+  }
+
+  function statusClasses(status: Submission["status"]) {
+    if (status === "approved") return "border-green-400 text-green-400";
+    if (status === "rejected") return "border-red-400 text-red-400";
+    return "border-yellow-400 text-yellow-400";
+  }
+
   return (
     <main className="mx-auto max-w-4xl px-4 py-12">
       <div className="mb-6 flex items-center justify-between">
@@ -102,9 +114,12 @@ export default function ReviewSubmissionsPage({ params }: { params: { id: string
                 <div className="text-xs text-black/60 dark:text-white/60">{s.address}</div>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`text-xs rounded px-2 py-0.5 border ${s.status === "approved" ? "border-green-400 text-green-400" : "border-yellow-400 text-yellow-400"}`}>{s.status}</span>
+                <span className={`text-xs rounded px-2 py-0.5 border ${statusClasses(s.status)}`}>{s.status}</span>
                 {s.status !== "approved" && (
                   <button onClick={() => approve(idx)} className="text-sm rounded-md border border-black/10 dark:border-white/10 px-3 py-1 hover:bg-black/5 dark:hover:bg-white/5">Approve</button>
+                )}
+                {s.status !== "rejected" && (
+                  <button onClick={() => reject(idx)} className="text-sm rounded-md border border-black/10 dark:border-white/10 px-3 py-1 hover:bg-black/5 dark:hover:bg-white/5">Reject</button>
                 )}
               </div>
             </li>

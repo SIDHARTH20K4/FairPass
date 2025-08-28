@@ -4,6 +4,8 @@ import { useEvents } from "@/hooks/useEvents";
 import { useState } from "react";
 import Link from "next/link";
 import { useAccount, useSignMessage } from "wagmi";
+import CustomDatePicker from "@/components/DatePicker";
+import SimpleDatePicker from "@/components/SimpleDatePicker";
 import { uploadImageToIPFS, uploadJsonToIPFS } from "@/lib/ipfs";
 
 const SUBMIT_KEY = (id: string) => `fairpass.events.submissions.${id}`;
@@ -146,8 +148,12 @@ export default function RegisterForEvent({ params }: { params: { id: string } })
             <input id="name" type="text" required value={values.name} onChange={(e) => setValues((v) => ({ ...v, name: e.target.value }))} className="w-full rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm outline-none" />
           </div>
           <div className="space-y-2">
-            <label className="block text-sm font-medium" htmlFor="dob">Date of birth</label>
-            <input id="dob" type="date" required value={values.dob} onChange={(e) => setValues((v) => ({ ...v, dob: e.target.value }))} className="w-full rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm outline-none" />
+            <SimpleDatePicker 
+              value={values.dob} 
+              onChange={(dob) => setValues((v) => ({ ...v, dob }))} 
+              label="Date of birth" 
+              required 
+            />
           </div>
           <div className="space-y-2">
             <label className="block text-sm font-medium" htmlFor="email">Email</label>

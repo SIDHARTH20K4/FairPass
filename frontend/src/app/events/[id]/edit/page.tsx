@@ -6,6 +6,11 @@ import { useAccount } from "wagmi";
 import { useEffect, useState } from "react";
 import { useEvents } from "@/hooks/useEvents";
 import ImageDropzone from "@/components/ImageDropzone";
+import CustomDatePicker from "@/components/DatePicker";
+import CustomTimePicker from "@/components/TimePicker";
+import SimpleDatePicker from "@/components/SimpleDatePicker";
+import SimpleTimePicker from "@/components/SimpleTimePicker";
+import LocationMap from "@/components/LocationMap";
 import { uploadImageToIPFS } from "@/lib/ipfs";
 
 export default function EditEventPage({ params }: { params: { id: string } }) {
@@ -142,25 +147,29 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="block text-sm font-medium" htmlFor="date">Date</label>
-            <input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm" />
+            <SimpleDatePicker 
+              value={date} 
+              onChange={setDate} 
+              label="Event Date" 
+            />
           </div>
           <div className="space-y-2">
-            <label className="block text-sm font-medium" htmlFor="time">Time</label>
-            <input id="time" type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm" />
+            <SimpleTimePicker 
+              value={time} 
+              onChange={setTime} 
+              label="Event Time" 
+            />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium" htmlFor="lat">Latitude</label>
-            <input id="lat" type="text" value={lat} onChange={(e) => setLat(e.target.value)} className="w-full rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm" />
-          </div>
-          <div className="space-y-2">
-            <label className="block text-sm font-medium" htmlFor="lng">Longitude</label>
-            <input id="lng" type="text" value={lng} onChange={(e) => setLng(e.target.value)} className="w-full rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm" />
-          </div>
-        </div>
+        <LocationMap 
+          lat={lat ? Number(lat) : undefined}
+          lng={lng ? Number(lng) : undefined}
+          onLocationChange={(lat, lng) => {
+            setLat(lat.toString());
+            setLng(lng.toString());
+          }}
+        />
 
         <div className="space-y-2">
           <span className="block text-sm font-medium">Pricing</span>
