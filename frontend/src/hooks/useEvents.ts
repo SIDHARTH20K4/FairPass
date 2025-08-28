@@ -25,6 +25,7 @@ export type EventItem = {
   lat?: number;
   lng?: number;
   formSchema?: FormField[];
+  hostAddress?: string; // organizer wallet address (lowercased)
   createdAt: number;
 };
 

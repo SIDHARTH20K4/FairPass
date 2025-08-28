@@ -1,14 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useSignMessage } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useRouter } from "next/navigation";
-import { useEvents, FormField } from "@/hooks/useEvents";
+import { useEvents } from "@/hooks/useEvents";
 import ImageDropzone from "@/components/ImageDropzone";
 import { uploadImageToIPFS } from "@/lib/ipfs";
-import FormBuilder from "@/components/FormBuilder";
-import MarkdownEditor from "@/components/MarkdownEditor";
 
 const LOCATIONS = [
   "Singapore",
@@ -38,7 +36,8 @@ const LOCATIONS = [
 ];
 
 export default function HostPage() {
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
+  const { signMessageAsync } = useSignMessage();
   const router = useRouter();
   const { addEvent } = useEvents();
 
@@ -56,7 +55,6 @@ export default function HostPage() {
   const [eventDescription, setEventDescription] = useState("");
   const [lat, setLat] = useState<string>("");
   const [lng, setLng] = useState<string>("");
-  const [formSchema, setFormSchema] = useState<FormField[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -72,6 +70,28 @@ export default function HostPage() {
 
     try {
       setSubmitting(true);
+
+      const payload = {
+        name,
+        isPaid,
+        price: isPaid && price ? Number(price) : undefined,
+        currency: isPaid ? currency : undefined,
+        approvalNeeded,
+        date,
+        time,
+        location,
+        organization,
+        organizationDescription,
+        eventDescription,
+        lat: lat ? Number(lat) : undefined,
+        lng: lng ? Number(lng) : undefined,
+        hostAddress: address?.toLowerCase(),
+        ts: Date.now(),
+      };
+
+      const msg = JSON.stringify(payload);
+      await signMessageAsync({ message: msg });
+
       const { cid, url } = await uploadImageToIPFS(bannerDataUrl);
 
       addEvent({
@@ -90,7 +110,7 @@ export default function HostPage() {
         eventDescription,
         lat: lat ? Number(lat) : undefined,
         lng: lng ? Number(lng) : undefined,
-        formSchema,
+        hostAddress: address?.toLowerCase(),
       });
 
       router.push("/events");
@@ -138,7 +158,7 @@ export default function HostPage() {
 
         <div className="space-y-2">
           <label className="block text-sm font-medium">Event description (Markdown)</label>
-          <MarkdownEditor value={eventDescription} onChange={setEventDescription} placeholder="Write details here... Use **bold**, lists, links, etc." />
+          <textarea value={eventDescription} onChange={(e) => setEventDescription(e.target.value)} rows={6} className="w-full rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm outline-none" placeholder="Write details here..." />
         </div>
 
         <div className="space-y-2">
@@ -177,10 +197,6 @@ export default function HostPage() {
         )}
 
         <div className="space-y-2">
-          <FormBuilder value={formSchema} onChange={setFormSchema} />
-        </div>
-
-        <div className="space-y-2">
           <span className="block text-sm font-medium">Pricing</span>
           <div className="flex items-center gap-4">
             <label className="inline-flex items-center gap-2 text-sm">
@@ -194,15 +210,7 @@ export default function HostPage() {
           </div>
           {isPaid && (
             <div className="grid grid-cols-3 gap-2 mt-2">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                placeholder="Price"
-                className="col-span-2 rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm"
-              />
+              <input type="number" min="0" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Price" className="col-span-2 rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm" />
               <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm">
                 <option value="USD">USD</option>
                 <option value="INR">INR</option>

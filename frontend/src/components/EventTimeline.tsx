@@ -1,6 +1,7 @@
 "use client";
 
 import { EventItem } from "@/hooks/useEvents";
+import Link from "next/link";
 
 function groupByDay(events: EventItem[]) {
   const map = new Map<string, EventItem[]>();
@@ -27,25 +28,27 @@ export default function EventTimeline({ events }: { events: EventItem[] }) {
             <h3 className="text-sm font-medium mb-3">{formatDay(day)}</h3>
             <div className="space-y-4">
               {items.map((e) => (
-                <article key={e.id} className="rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-4 flex items-center justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="text-xs text-black/60 dark:text-white/60">{formatTime(e.time)}</div>
-                      {e.isPaid && e.price !== undefined && (
-                        <span className="text-[10px] uppercase rounded px-2 py-0.5 border border-black/15 dark:border-white/15">{e.currency || "USD"} {e.price}</span>
-                      )}
+                <Link key={e.id} href={`/events/${e.id}`} className="block rounded-lg border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-4 hover:bg-black/10 dark:hover:bg-white/10 transition-colors">
+                  <article className="flex items-center justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="text-xs text-black/60 dark:text-white/60">{formatTime(e.time)}</div>
+                        {e.isPaid && e.price !== undefined && (
+                          <span className="text-[10px] uppercase rounded px-2 py-0.5 border border-black/15 dark:border-white/15">{e.currency || "USD"} {e.price}</span>
+                        )}
+                      </div>
+                      <h4 className="font-medium truncate">{e.name}</h4>
+                      <div className="text-xs text-black/70 dark:text-white/70 truncate">{e.organization || ""}</div>
+                      <div className="text-xs flex items-center gap-2 text-black/70 dark:text-white/70 mt-1">
+                        <span>{e.location}</span>
+                      </div>
                     </div>
-                    <h4 className="font-medium truncate">{e.name}</h4>
-                    <div className="text-xs text-black/70 dark:text-white/70 truncate">{e.organization || ""}</div>
-                    <div className="text-xs flex items-center gap-2 text-black/70 dark:text-white/70 mt-1">
-                      <span>{e.location}</span>
-                    </div>
-                  </div>
-                  {e.bannerUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={e.bannerUrl} alt="banner" className="w-28 h-20 object-cover rounded-md border border-black/10 dark:border-white/10" />
-                  )}
-                </article>
+                    {e.bannerUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={e.bannerUrl} alt="banner" className="w-28 h-20 object-cover rounded-md border border-black/10 dark:border-white/10" />
+                    )}
+                  </article>
+                </Link>
               ))}
             </div>
           </section>
