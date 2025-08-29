@@ -1,6 +1,7 @@
-import mongoose from 'mongoose';
+import mongoose, { Schema } from 'mongoose';
+import { ISubmission } from '../types';
 
-const SubmissionSchema = new mongoose.Schema({
+const SubmissionSchema = new Schema<ISubmission>({
   eventId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Event',
@@ -44,4 +45,4 @@ SubmissionSchema.index({ eventId: 1, address: 1 }, { unique: true });
 SubmissionSchema.index({ eventId: 1, status: 1 });
 SubmissionSchema.index({ address: 1 });
 
-export default mongoose.model('Submission', SubmissionSchema);
+export default mongoose.model<ISubmission>('Submission', SubmissionSchema);

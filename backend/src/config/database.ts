@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 let isConnected = false;
 
-export const connectDB = async () => {
+export const connectDB = async (): Promise<void> => {
   if (isConnected) {
     console.log('MongoDB already connected');
     return;
@@ -23,7 +23,7 @@ export const connectDB = async () => {
   }
 };
 
-export const disconnectDB = async () => {
+export const disconnectDB = async (): Promise<void> => {
   if (!isConnected) return;
   
   try {

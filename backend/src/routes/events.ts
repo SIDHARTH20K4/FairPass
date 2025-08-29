@@ -1,13 +1,14 @@
-import express from 'express';
-import Event from '../models/Event.js';
+import express, { Request, Response } from 'express';
+import Event from '../models/Event';
+import { CreateEventRequest, UpdateEventRequest, EventQuery, EventResponse } from '../types';
 
 const router = express.Router();
 
 // Get all events
-router.get('/', async (req, res) => {
+router.get('/', async (req: Request<{}, {}, {}, EventQuery>, res: Response) => {
   try {
     const { location } = req.query;
-    let query = {};
+    let query: any = {};
     
     if (location && location !== 'Worldwide') {
       query.location = location;
@@ -17,7 +18,7 @@ router.get('/', async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
     
-    const eventsWithId = events.map(event => ({
+    const eventsWithId: EventResponse[] = events.map(event => ({
       ...event,
       id: event._id.toString()
     }));
@@ -30,7 +31,7 @@ router.get('/', async (req, res) => {
 });
 
 // Get single event by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
   try {
     const event = await Event.findById(req.params.id).lean();
     
@@ -38,10 +39,12 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Event not found' });
     }
     
-    res.json({
+    const eventResponse: EventResponse = {
       ...event,
       id: event._id.toString()
-    });
+    };
+    
+    res.json(eventResponse);
   } catch (error) {
     console.error('Error fetching event:', error);
     res.status(500).json({ error: 'Failed to fetch event' });
@@ -49,7 +52,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create new event
-router.post('/', async (req, res) => {
+router.post('/', async (req: Request<{}, {}, CreateEventRequest>, res: Response) => {
   try {
     const eventData = req.body;
     
@@ -61,10 +64,12 @@ router.post('/', async (req, res) => {
     const event = new Event(eventData);
     const savedEvent = await event.save();
     
-    res.status(201).json({
+    const eventResponse: EventResponse = {
       ...savedEvent.toObject(),
       id: savedEvent._id.toString()
-    });
+    };
+    
+    res.status(201).json(eventResponse);
   } catch (error) {
     console.error('Error creating event:', error);
     res.status(500).json({ error: 'Failed to create event' });
@@ -72,7 +77,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update event
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', async (req: Request<{ id: string }, {}, UpdateEventRequest>, res: Response) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
@@ -87,10 +92,12 @@ router.patch('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Event not found' });
     }
     
-    res.json({
+    const eventResponse: EventResponse = {
       ...event,
       id: event._id.toString()
-    });
+    };
+    
+    res.json(eventResponse);
   } catch (error) {
     console.error('Error updating event:', error);
     res.status(500).json({ error: 'Failed to update event' });
@@ -98,7 +105,7 @@ router.patch('/:id', async (req, res) => {
 });
 
 // Delete event
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: Request<{ id: string }>, res: Response) => {
   try {
     const { id } = req.params;
     const event = await Event.findByIdAndDelete(id);

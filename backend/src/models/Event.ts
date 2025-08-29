@@ -1,6 +1,7 @@
-import mongoose from 'mongoose';
+import mongoose, { Schema, Document } from 'mongoose';
+import { IEvent } from '../types';
 
-const EventSchema = new mongoose.Schema({
+const EventSchema = new Schema<IEvent>({
   name: {
     type: String,
     required: true,
@@ -71,4 +72,4 @@ const EventSchema = new mongoose.Schema({
 EventSchema.index({ location: 1, date: 1 });
 EventSchema.index({ hostAddress: 1 });
 
-export default mongoose.model('Event', EventSchema);
+export default mongoose.model<IEvent>('Event', EventSchema);
