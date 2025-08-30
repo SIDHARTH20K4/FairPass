@@ -8,7 +8,7 @@ const router = express.Router();
 router.get('/', async (req: Request<{}, {}, {}, EventQuery>, res: Response) => {
   try {
     const { location } = req.query;
-    let query: any = {};
+    let query: any = { status: 'published' };
     
     if (location && location !== 'Worldwide') {
       query.location = location;
@@ -61,7 +61,7 @@ router.post('/', async (req: Request<{}, {}, CreateEventRequest>, res: Response)
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
-    const event = new Event(eventData);
+    const event = new Event({ ...eventData, status: eventData.status || 'draft' });
     const savedEvent = await event.save();
     
     const eventResponse: EventResponse = {
@@ -77,7 +77,7 @@ router.post('/', async (req: Request<{}, {}, CreateEventRequest>, res: Response)
 });
 
 // Update event
-router.patch('/:id', async (req: Request<{ id: string }, {}, UpdateEventRequest>, res: Response) => {
+router.patch('/:id', async (req: Request<{ id: string }, {}, UpdateEventRequest & { status?: 'draft' | 'published' }>, res: Response) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
@@ -101,6 +101,22 @@ router.patch('/:id', async (req: Request<{ id: string }, {}, UpdateEventRequest>
   } catch (error) {
     console.error('Error updating event:', error);
     res.status(500).json({ error: 'Failed to update event' });
+  }
+});
+
+// Host: list all events including drafts
+router.get('/host/:address', async (req: Request<{ address: string }, {}, {}, { status?: string }>, res: Response) => {
+  try {
+    const { address } = req.params;
+    const { status } = req.query;
+    const query: any = { hostAddress: address.toLowerCase() };
+    if (status) query.status = status;
+    const events = await Event.find(query).sort({ updatedAt: -1 }).lean();
+    const eventsWithId: EventResponse[] = events.map(event => ({ ...event, id: event._id.toString() }));
+    res.json(eventsWithId);
+  } catch (error) {
+    console.error('Error fetching host events:', error);
+    res.status(500).json({ error: 'Failed to fetch host events' });
   }
 });
 

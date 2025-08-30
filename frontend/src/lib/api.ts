@@ -64,3 +64,28 @@ export async function apiUpdateRegistration(
 export async function apiGetUserRegistration(eventId: string, address: string): Promise<ApiSubmission> {
   return apiFetch(`/events/${eventId}/registrations/user/${address}`);
 }
+
+// Organization events endpoints
+export async function apiGetOrganizationEvents(address: string, status?: string): Promise<ApiEvent[]> {
+  const params = status ? `?status=${status}` : '';
+  return apiFetch(`/events/host/${address}${params}`);
+}
+
+export async function apiUpdateEventStatus(id: string, status: 'draft' | 'published'): Promise<ApiEvent> {
+  return apiFetch(`/events/${id}`, { 
+    method: "PATCH", 
+    body: JSON.stringify({ status }) 
+  });
+}
+
+// Registration count endpoints
+export async function apiGetEventRegistrationCount(eventId: string): Promise<{ count: number }> {
+  return apiFetch(`/events/${eventId}/registrations/count`);
+}
+
+export async function apiGetEventsRegistrationCounts(eventIds: string[]): Promise<Record<string, number>> {
+  if (eventIds.length === 0) return {};
+  
+  const params = eventIds.map(id => `ids=${id}`).join('&');
+  return apiFetch(`/events/registrations/counts?${params}`);
+}

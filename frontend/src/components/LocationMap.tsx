@@ -1,14 +1,34 @@
-import React, { useState, useRef, useCallback } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
-import L, { LatLngExpression } from "leaflet";
+"use client";
 
-// Fix for default marker icons in Leaflet with Next.js
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import dynamic from "next/dynamic";
+import { LatLngExpression } from "leaflet";
+
+// Dynamically import Leaflet components to avoid SSR issues
+const MapContainer = dynamic(
+  () => import("react-leaflet").then((mod) => mod.MapContainer),
+  { ssr: false }
+);
+
+const TileLayer = dynamic(
+  () => import("react-leaflet").then((mod) => mod.TileLayer),
+  { ssr: false }
+);
+
+const Marker = dynamic(
+  () => import("react-leaflet").then((mod) => mod.Marker),
+  { ssr: false }
+);
+
+const Popup = dynamic(
+  () => import("react-leaflet").then((mod) => mod.Popup),
+  { ssr: false }
+);
+
+const Polyline = dynamic(
+  () => import("react-leaflet").then((mod) => mod.Polyline),
+  { ssr: false }
+);
 
 const defaultCenter: LatLngExpression = [28.6139, 77.2090]; // Delhi
 
@@ -23,26 +43,46 @@ const LocationMap: React.FC<LocationMapProps> = ({ lat, lng, onLocationChange })
     lat && lng ? [lat, lng] : defaultCenter
   );
   const [route, setRoute] = useState<LatLngExpression[]>([]);
-  const markerRef = useRef<L.Marker<any>>(null);
+  const [isClient, setIsClient] = useState(false);
+  const [L, setL] = useState<any>(null);
+  const markerRef = useRef<any>(null);
+
+  // Initialize Leaflet only on client side
+  useEffect(() => {
+    setIsClient(true);
+    import("leaflet").then((leaflet) => {
+      setL(leaflet.default);
+      
+      // Fix for default marker icons in Leaflet with Next.js
+      delete (leaflet.default.Icon.Default.prototype as any)._getIconUrl;
+      leaflet.default.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+      });
+    });
+  }, []);
 
   // Handle marker drag
   const onDragEnd = useCallback(() => {
     const marker = markerRef.current;
-    if (marker != null) {
+    if (marker != null && L) {
       const latlng = marker.getLatLng();
       const newPosition: LatLngExpression = [latlng.lat, latlng.lng];
       setPosition(newPosition);
       onLocationChange(latlng.lat, latlng.lng);
       console.log("Dragged to:", latlng);
     }
-  }, [onLocationChange]);
+  }, [onLocationChange, L]);
 
   // Handle map click
-  const handleMapClick = useCallback((e: L.LeafletMouseEvent) => {
-    const newPosition: LatLngExpression = [e.latlng.lat, e.latlng.lng];
-    setPosition(newPosition);
-    onLocationChange(e.latlng.lat, e.latlng.lng);
-  }, [onLocationChange]);
+  const handleMapClick = useCallback((e: any) => {
+    if (L) {
+      const newPosition: LatLngExpression = [e.latlng.lat, e.latlng.lng];
+      setPosition(newPosition);
+      onLocationChange(e.latlng.lat, e.latlng.lng);
+    }
+  }, [onLocationChange, L]);
 
   // Get directions (using OSRM)
   const getDirections = async () => {
@@ -65,14 +105,34 @@ const LocationMap: React.FC<LocationMapProps> = ({ lat, lng, onLocationChange })
 
   const center = lat && lng ? [lat, lng] as LatLngExpression : defaultCenter;
 
+  // Show loading state while client-side code initializes
+  if (!isClient || !L) {
+    return (
+      <div className="space-y-3">
+        <label className="block text-lg font-medium text-foreground">Event Location</label>
+        <div className="rounded-xl border border-foreground/10 overflow-hidden bg-foreground/5">
+          <div className="h-80 flex items-center justify-center">
+            <div className="text-center">
+              <div className="w-8 h-8 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-foreground/60">Loading map...</p>
+            </div>
+          </div>
+        </div>
+        <p className="text-sm text-foreground/60">
+          Click on the map or drag the marker to set the event location
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-2">
-      <label className="block text-sm font-medium">Event Location</label>
-      <div className="rounded-md border border-black/10 dark:border-white/10 overflow-hidden">
+    <div className="space-y-3">
+      <label className="block text-lg font-medium text-foreground">Event Location</label>
+      <div className="rounded-xl border border-foreground/10 overflow-hidden bg-foreground/5">
         <MapContainer 
           center={center} 
           zoom={13} 
-          style={{ height: "300px", width: "100%" }}
+          style={{ height: "320px", width: "100%" }}
           onClick={handleMapClick}
         >
           <TileLayer
@@ -101,18 +161,18 @@ const LocationMap: React.FC<LocationMapProps> = ({ lat, lng, onLocationChange })
       </div>
       
       <div className="flex items-center justify-between">
-        <p className="text-xs text-gray-500">
+        <p className="text-sm text-foreground/60">
           Click on the map or drag the marker to set the event location
         </p>
         <button
           onClick={getDirections}
-          className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+          className="btn-secondary text-sm px-3 py-1"
         >
           Get Directions
         </button>
       </div>
       
-      <div className="text-xs text-gray-400">
+      <div className="text-sm text-foreground/60 font-mono">
         Coordinates: {(position as number[])[0].toFixed(6)}, {(position as number[])[1].toFixed(6)}
       </div>
     </div>

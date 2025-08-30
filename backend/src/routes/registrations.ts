@@ -167,4 +167,62 @@ router.get('/events/:eventId/registrations/user/:address', async (
   }
 });
 
+// Get registration count for an event
+router.get('/events/:eventId/registrations/count', async (req: Request<{ eventId: string }>, res: Response) => {
+  try {
+    const { eventId } = req.params;
+    
+    // Verify event exists
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    
+    const count = await Submission.countDocuments({ eventId });
+    
+    res.json({ count });
+  } catch (error) {
+    console.error('Error fetching registration count:', error);
+    res.status(500).json({ error: 'Failed to fetch registration count' });
+  }
+});
+
+// Get registration counts for multiple events
+router.get('/events/registrations/counts', async (req: Request<{}, {}, {}, { ids: string }>, res: Response) => {
+  try {
+    const { ids } = req.query;
+    
+    if (!ids) {
+      return res.status(400).json({ error: 'Event IDs are required' });
+    }
+    
+    const eventIds = Array.isArray(ids) ? ids : [ids];
+    
+    // Get counts for all events
+    const counts = await Submission.aggregate([
+      {
+        $match: { eventId: { $in: eventIds } }
+      },
+      {
+        $group: {
+          _id: '$eventId',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    // Convert to object format
+    const countMap: Record<string, number> = {};
+    eventIds.forEach(id => {
+      const found = counts.find(c => c._id === id);
+      countMap[id] = found ? found.count : 0;
+    });
+    
+    res.json(countMap);
+  } catch (error) {
+    console.error('Error fetching registration counts:', error);
+    res.status(500).json({ error: 'Failed to fetch registration counts' });
+  }
+});
+
 export default router;

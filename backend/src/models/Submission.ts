@@ -1,7 +1,7 @@
 import mongoose, { Schema } from 'mongoose';
 import { ISubmission } from '../types';
 
-const SubmissionSchema = new Schema<ISubmission>({
+const SubmissionSchema = new Schema({
   eventId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Event',
@@ -14,6 +14,9 @@ const SubmissionSchema = new Schema<ISubmission>({
   values: {
     type: Object,
     required: true
+  },
+  commitment: {
+    type: String
   },
   status: {
     type: String,

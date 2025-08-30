@@ -7,6 +7,8 @@ import { useAccount, useSignMessage } from "wagmi";
 import CustomDatePicker from "@/components/DatePicker";
 import SimpleDatePicker from "@/components/SimpleDatePicker";
 import { uploadImageToIPFS, uploadJsonToIPFS } from "@/lib/ipfs";
+import { Identity } from "@semaphore-protocol/identity";
+import React from "react";
 
 const SUBMIT_KEY = (id: string) => `fairpass.events.submissions.${id}`;
 
@@ -22,8 +24,8 @@ type Submission = {
   signature?: string;
 };
 
-export default function RegisterForEvent({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default function RegisterForEvent({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = React.use(params);
   const { events } = useEvents();
   const event = events.find((e) => e.id === id);
   const { address, isConnected } = useAccount();
@@ -77,16 +79,35 @@ export default function RegisterForEvent({ params }: { params: { id: string } })
       let jsonUrl: string | undefined;
       let jsonCid: string | undefined;
 
+      // Create or reuse user Identity for this event
+      // Persist minimal identity trapdoor/nonce in localStorage per event
+      const IDENTITY_KEY = `fairpass.identity.${id}`;
+      let identityJson = localStorage.getItem(IDENTITY_KEY);
+      let identity: Identity;
+      if (identityJson) {
+        identity = Identity.fromString(identityJson);
+      } else {
+        identity = new Identity();
+        localStorage.setItem(IDENTITY_KEY, identity.toString());
+      }
+      const commitment = identity.commitment.toString();
+
+      // Send registration to backend with commitment included
+      await fetch(`/api/events/${id}/registrations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: address.toLowerCase(), values, signature, commitment }),
+      });
+
       if (!needsApproval) {
-        const qrData = encodeURIComponent(JSON.stringify({ ...payload, signature }));
+        // For non-approval events, generate QR for { eventId, commitment }
+        const qrData = encodeURIComponent(JSON.stringify({ eventId: id, commitment }));
         const qrUrlData = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrData}`;
         const qrUpload = await uploadImageToIPFS(qrUrlData);
-        qrImageUrl = qrUpload.url;
-        qrCid = qrUpload.cid;
+        qrImageUrl = qrUpload.url; qrCid = qrUpload.cid;
 
-        const jsonUpload = await uploadJsonToIPFS({ ...payload, signature });
-        jsonUrl = jsonUpload.url;
-        jsonCid = jsonUpload.cid;
+        const jsonUpload = await uploadJsonToIPFS({ eventId: id, commitment });
+        jsonUrl = jsonUpload.url; jsonCid = jsonUpload.cid;
       }
 
       const entry: Submission = {

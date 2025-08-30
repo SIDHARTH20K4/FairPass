@@ -12,9 +12,10 @@ import SimpleDatePicker from "@/components/SimpleDatePicker";
 import SimpleTimePicker from "@/components/SimpleTimePicker";
 import LocationMap from "@/components/LocationMap";
 import { uploadImageToIPFS } from "@/lib/ipfs";
+import React from "react";
 
-export default function EditEventPage({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default function EditEventPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = React.use(params);
   const router = useRouter();
   const { events, updateEvent } = useEvents();
   const event = events.find((e) => e.id === id);
@@ -74,6 +75,8 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    if (!event) return;
+    
     try {
       setSaving(true);
       let bannerUrl = event.bannerUrl;

@@ -17,6 +17,7 @@ export interface EventDoc {
   lat?: number;
   lng?: number;
   hostAddress?: string;
+  status: 'draft' | 'published';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,6 +40,7 @@ const EventSchema = new Schema<EventDoc>(
     lat: Number,
     lng: Number,
     hostAddress: String,
+    status: { type: String, enum: ['draft', 'published'], default: 'draft' },
   },
   { timestamps: true }
 );

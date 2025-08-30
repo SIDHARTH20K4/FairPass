@@ -19,6 +19,7 @@ export interface IEvent extends Document {
   lat?: number;
   lng?: number;
   hostAddress: string;
+  status: 'draft' | 'published';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -40,6 +41,7 @@ export interface CreateEventRequest {
   lat?: number;
   lng?: number;
   hostAddress: string;
+  status?: 'draft' | 'published';
 }
 
 export interface UpdateEventRequest extends Partial<CreateEventRequest> {}
@@ -50,6 +52,7 @@ export interface ISubmission extends Document {
   address: string;
   values: Record<string, any>;
   status: 'pending' | 'approved' | 'rejected';
+  commitment?: string;
   qrCid?: string;
   qrUrl?: string;
   jsonCid?: string;
@@ -63,6 +66,7 @@ export interface CreateSubmissionRequest {
   address: string;
   values: Record<string, any>;
   signature: string;
+  commitment?: string;
 }
 
 export interface UpdateSubmissionRequest {
@@ -116,3 +120,22 @@ export interface AppError extends Error {
 // Express Middleware Types
 export type AsyncHandler = (req: Request, res: Response, next: NextFunction) => Promise<void>;
 export type ErrorHandler = (err: AppError, req: Request, res: Response, next: NextFunction) => void;
+
+// Organization Types
+export interface IOrganization extends Document {
+  address: string; // host wallet address (lowercased) - required for wallet auth
+  name: string;
+  description?: string;
+  email?: string;
+  password?: string; // hashed password for email authentication
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateOrganizationRequest {
+  address: string;
+  name: string;
+  description?: string;
+  email?: string;
+  signature: string; // signed message for verification
+}

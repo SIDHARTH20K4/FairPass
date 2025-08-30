@@ -179,3 +179,107 @@ The server uses Morgan for HTTP request logging. Check console output for:
 - Request logs
 - Error messages
 - Database connection status
+
+## Database Migration: Fix Duplicate Key Error
+
+### Problem
+The application was experiencing a MongoDB duplicate key error:
+```
+E11000 duplicate key error collection: fairpass.organizations index: address_1 dup key: { address: null }
+```
+
+This occurred because:
+1. Multiple organizations were being created with `null` addresses
+2. The `address` field had a unique index but wasn't required
+3. MongoDB doesn't allow duplicate `null` values in unique indexed fields
+
+### Solution Implemented
+
+#### 1. Updated Organization Model
+- Made `address` field **required** instead of optional
+- Added proper validation and indexing
+- Ensured addresses are stored in lowercase for consistency
+
+#### 2. Enhanced Auth System
+- Added wallet-based authentication support
+- Improved validation to prevent null addresses
+- Better error handling for duplicate key errors
+
+#### 3. Frontend Updates
+- Registration form now requires wallet address
+- Enhanced validation and user experience
+- Better error messages and guidance
+
+### Running the Database Migration
+
+#### Prerequisites
+- Node.js installed
+- MongoDB running
+- Environment variables configured
+
+#### Steps
+
+1. **Navigate to backend directory:**
+   ```bash
+   cd backend
+   ```
+
+2. **Install dependencies (if not already done):**
+   ```bash
+   npm install
+   ```
+
+3. **Run the migration script:**
+   ```bash
+   node scripts/fix-null-addresses.js
+   ```
+
+#### What the Script Does
+
+1. **Connects to MongoDB** using environment variables
+2. **Finds organizations** with null/undefined addresses
+3. **Deletes invalid records** (organizations without addresses)
+4. **Verifies cleanup** and reports results
+5. **Checks for duplicates** and reports any remaining issues
+
+#### Expected Output
+
+```
+Starting database cleanup...
+Found X organizations with null addresses
+Deleted X organizations with null addresses
+✅ Successfully cleaned up all organizations with null addresses
+✅ No duplicate addresses found
+Database connection closed
+```
+
+### After Migration
+
+1. **Restart the backend server** to ensure schema changes take effect
+2. **Test registration** with a valid wallet address
+3. **Verify** that no more duplicate key errors occur
+
+### Prevention
+
+The updated system now:
+- **Requires wallet addresses** for all organizations
+- **Validates addresses** before database insertion
+- **Provides clear error messages** for validation failures
+- **Maintains data integrity** with proper constraints
+
+### Troubleshooting
+
+If you encounter issues:
+
+1. **Check MongoDB connection** in environment variables
+2. **Verify database permissions** for the migration script
+3. **Review logs** for specific error messages
+4. **Ensure backend server** is restarted after schema changes
+
+### Support
+
+For additional help, check:
+- Backend logs for detailed error information
+- MongoDB connection status
+- Environment variable configuration
+- Database schema validation

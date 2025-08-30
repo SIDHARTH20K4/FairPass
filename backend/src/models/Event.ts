@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema } from 'mongoose';
 import { IEvent } from '../types';
 
 const EventSchema = new Schema<IEvent>({
@@ -63,6 +63,11 @@ const EventSchema = new Schema<IEvent>({
   hostAddress: {
     type: String,
     required: true
+  },
+  status: {
+    type: String,
+    enum: ['draft', 'published'],
+    default: 'draft'
   }
 }, {
   timestamps: true

@@ -45,6 +45,51 @@ export default function HostPage() {
   const { signMessageAsync } = useSignMessage();
   const router = useRouter();
   const { addEvent } = useEvents();
+  const [orgExists, setOrgExists] = useState<boolean | null>(null);
+  const [orgName, setOrgName] = useState("");
+  const [orgEmail, setOrgEmail] = useState("");
+  const [orgDescription, setOrgDescription] = useState("");
+  // Check if organization exists for connected wallet
+  async function checkOrganization() {
+    if (!address) return;
+    try {
+      const res = await fetch(`/api/organizations/${address.toLowerCase()}`);
+      setOrgExists(res.ok);
+    } catch {
+      setOrgExists(false);
+    }
+  }
+  
+  if (isConnected && orgExists === null) {
+    // fire and forget initial check
+    checkOrganization();
+  }
+
+  async function registerOrganization(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isConnected || !address) {
+      alert('Connect wallet first');
+      return;
+    }
+    const payload = {
+      address: address.toLowerCase(),
+      name: orgName,
+      description: orgDescription,
+      email: orgEmail,
+    };
+    const message = JSON.stringify(payload);
+    const signature = await signMessageAsync({ message });
+    const res = await fetch('/api/organizations', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, signature })
+    });
+    if (!res.ok) {
+      alert('Failed to register organization');
+      return;
+    }
+    setOrgExists(true);
+  }
+
 
   const [name, setName] = useState("");
   const [bannerDataUrl, setBannerDataUrl] = useState("");
@@ -92,6 +137,7 @@ export default function HostPage() {
         lng: lng ? Number(lng) : undefined,
         hostAddress: address?.toLowerCase(),
         ts: Date.now(),
+        status: 'draft' as const,
       };
 
       const msg = JSON.stringify(payload);
@@ -99,26 +145,19 @@ export default function HostPage() {
 
       const { cid, url } = await uploadImageToIPFS(bannerDataUrl);
 
-      addEvent({
-        name,
-        bannerUrl: url,
-        bannerCid: cid,
-        isPaid,
-        price: isPaid && price ? Number(price) : undefined,
-        currency: isPaid ? currency : undefined,
-        approvalNeeded,
-        date,
-        time,
-        location,
-        organization,
-        organizationDescription,
-        eventDescription,
-        lat: lat ? Number(lat) : undefined,
-        lng: lng ? Number(lng) : undefined,
-        hostAddress: address?.toLowerCase(),
+      // Create event as draft via backend
+      const res = await fetch('/api/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...payload,
+          bannerUrl: url,
+          bannerCid: cid,
+        }),
       });
-
-      router.push("/events");
+      if (!res.ok) throw new Error('Failed to create event');
+      const created = await res.json();
+      router.push(`/host/${address?.toLowerCase()}`);
     } catch (err: any) {
       alert(err?.message || "Failed to create event");
     } finally {
@@ -141,6 +180,29 @@ export default function HostPage() {
         <div className="mb-6">
           <ConnectButton />
         </div>
+      )}
+
+      {isConnected && orgExists === false && (
+        <form onSubmit={registerOrganization} className="space-y-6">
+          <div className="rounded-md border border-black/10 dark:border-white/10 p-4">
+            <h2 className="text-lg font-medium mb-2">Register your organization</h2>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium" htmlFor="orgName">Organization name</label>
+              <input id="orgName" type="text" value={orgName} onChange={(e) => setOrgName(e.target.value)} className="w-full rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm" required />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium" htmlFor="orgEmail">Contact email</label>
+              <input id="orgEmail" type="email" value={orgEmail} onChange={(e) => setOrgEmail(e.target.value)} className="w-full rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm" />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium" htmlFor="orgAbout">Description</label>
+              <textarea id="orgAbout" value={orgDescription} onChange={(e) => setOrgDescription(e.target.value)} rows={3} className="w-full rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm" />
+            </div>
+            <div className="mt-3">
+              <button type="submit" className="inline-flex items-center rounded-md border border-black/10 dark:border-white/10 px-4 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5">Sign & Register</button>
+            </div>
+          </div>
+        </form>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">

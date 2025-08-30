@@ -7,12 +7,15 @@ import { connectDB } from './config/database';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import eventRoutes from './routes/events';
 import registrationRoutes from './routes/registrations';
+import approveUsersRouter from './routes/approveUsers';
+import organizationRoutes from './routes/organizations';
+import authRoutes from './routes/auth';
 
 // Load environment variables
 dotenv.config({ path: '../config.env' });
 
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT = process.env["PORT"] || 4000;
 
 // Connect to MongoDB
 connectDB();
@@ -21,14 +24,14 @@ connectDB();
 app.use(helmet());
 app.use(morgan('combined'));
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: process.env["CORS_ORIGIN"] || 'http://localhost:3000',
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
@@ -39,6 +42,9 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/events', eventRoutes);
 app.use('/api', registrationRoutes);
+app.use('/api', approveUsersRouter);
+app.use('/api', organizationRoutes);
+app.use('/api/auth', authRoutes);
 
 // 404 handler
 app.use(notFound);

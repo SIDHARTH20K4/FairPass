@@ -8,6 +8,7 @@ import Header from "../components/Header";
 export const metadata: Metadata = {
   title: "FairPass",
   description: "Ticketing dApp",
+  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
 };
 
 const geistSans = Geist({

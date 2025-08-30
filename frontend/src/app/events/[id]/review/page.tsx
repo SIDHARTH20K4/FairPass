@@ -5,6 +5,7 @@ import { useEvents } from "@/hooks/useEvents";
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 import { uploadImageToIPFS, uploadJsonToIPFS } from "@/lib/ipfs";
+import React from "react";
 
 const SUBMIT_KEY = (id: string) => `fairpass.events.submissions.${id}`;
 
@@ -20,16 +21,38 @@ type Submission = {
   signature?: string;
 };
 
-export default function ReviewSubmissionsPage({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = React.use(params);
   const { events } = useEvents();
   const event = events.find((e) => e.id === id);
   const { address } = useAccount();
   const [subs, setSubs] = useState<Submission[]>([]);
 
   useEffect(() => {
-    const existing: Submission[] = JSON.parse(localStorage.getItem(SUBMIT_KEY(id)) || "[]");
-    setSubs(existing);
+    async function load() {
+      try {
+        const res = await fetch(`/api/events/${id}/registrations`);
+        const data = await res.json();
+        // Expecting backend shape; map to local type minimally
+        const mapped: Submission[] = (data || []).map((s: any) => ({
+          values: s.values || {},
+          at: new Date(s.createdAt || Date.now()).getTime(),
+          status: s.status || "pending",
+          address: s.address,
+          qrCid: s.qrCid,
+          qrUrl: s.qrUrl,
+          jsonCid: s.jsonCid,
+          jsonUrl: s.jsonUrl,
+          signature: s.signature,
+        }));
+        setSubs(mapped);
+      } catch (e) {
+        console.error(e);
+        const existing: Submission[] = JSON.parse(localStorage.getItem(SUBMIT_KEY(id)) || "[]");
+        setSubs(existing);
+      }
+    }
+    load();
   }, [id]);
 
   if (!event) {
@@ -59,26 +82,26 @@ export default function ReviewSubmissionsPage({ params }: { params: { id: string
     let jsonUrl = s.jsonUrl;
     let jsonCid = s.jsonCid;
 
+    // Call backend to approve: need commitment saved server-side with submission
+    // We cannot reconstruct commitment here; ensure register stored it
+    await fetch(`/api/approveUsers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId: id, commitment: (s as any).commitment }),
+    });
+
+    // Optional: generate IPFS artifacts with minimal ZK QR payload
     if (!qrUrl || !jsonUrl) {
-      const payload = {
-        eventId: id,
-        eventName: event.name,
-        address: s.address,
-        ...s.values,
-        status: "approved" as const,
-        ts: s.at,
-        signature: s.signature,
-      };
-      const qrData = encodeURIComponent(JSON.stringify(payload));
+      const qrPayload = { eventId: id, commitment: (s as any).commitment };
+      const qrData = encodeURIComponent(JSON.stringify(qrPayload));
       const qrUpload = await uploadImageToIPFS(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrData}`);
       qrUrl = qrUpload.url; qrCid = qrUpload.cid;
-      const jsonUpload = await uploadJsonToIPFS(payload);
+      const jsonUpload = await uploadJsonToIPFS(qrPayload);
       jsonUrl = jsonUpload.url; jsonCid = jsonUpload.cid;
     }
 
     const next = subs.map((item, i) => i === index ? { ...item, status: "approved", qrUrl, qrCid, jsonUrl, jsonCid } : item);
     setSubs(next);
-    localStorage.setItem(SUBMIT_KEY(id), JSON.stringify(next));
   }
 
   function reject(index: number) {
