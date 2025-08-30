@@ -8,6 +8,7 @@ import SimpleTimePicker from "@/components/SimpleTimePicker";
 import LocationMap from "@/components/LocationMap";
 import { uploadImageToIPFS } from "@/lib/ipfs";
 import { useAuth } from "@/hooks/useAuth";
+import { apiCreateEvent } from "@/lib/api";
 
 const LOCATIONS = [
   "Singapore","Mumbai","Bengaluru","Delhi","Jakarta","Seoul","Tokyo","Sydney","Taipei","Dubai","London","Paris","Berlin","Lisbon","Amsterdam","San Francisco","New York","Toronto","Austin","Buenos Aires","São Paulo","Cape Town","Nairobi","Worldwide",
@@ -89,20 +90,13 @@ export default function CreateEventPage() {
         eventDescription,
         lat: lat ? Number(lat) : undefined,
         lng: lng ? Number(lng) : undefined,
-        hostAddress: organization.id,
+        hostAddress: organization.address,
         status: 'draft' as const,
       };
       
       const { cid, url } = await uploadImageToIPFS(bannerDataUrl);
-      const res = await fetch('/api/events', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ ...payload, bannerUrl: url, bannerCid: cid }) 
-      });
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to create event');
-      }
+      const eventData = { ...payload, bannerUrl: url, bannerCid: cid };
+      const createdEvent = await apiCreateEvent(eventData);
       router.replace('/host/dashboard');
     } catch (e: any) {
       alert(e?.message || 'Failed to create event');

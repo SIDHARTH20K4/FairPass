@@ -5,6 +5,7 @@ import { useEvents } from "@/hooks/useEvents";
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 import { uploadImageToIPFS, uploadJsonToIPFS } from "@/lib/ipfs";
+import { apiUpdateEvent } from "@/lib/api";
 import React from "react";
 
 const SUBMIT_KEY = (id: string) => `fairpass.events.submissions.${id}`;
@@ -55,6 +56,25 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
     load();
   }, [id]);
 
+  // Function to fix wrong hostAddress
+  async function fixHostAddress() {
+    if (!address) return;
+    
+    try {
+      console.log('Fixing hostAddress for event:', id);
+      console.log('Old hostAddress:', event.hostAddress);
+      console.log('New hostAddress:', address.toLowerCase());
+      
+      await apiUpdateEvent(id, { hostAddress: address.toLowerCase() });
+      
+      // Refresh the page to get updated event data
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to fix hostAddress:', error);
+      alert('Failed to fix hostAddress. Please try again.');
+    }
+  }
+
   if (!event) {
     if (loading) {
       return (
@@ -104,18 +124,33 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
         <div className="space-y-4">
           <p className="text-sm">Not authorized. Connect as the host wallet to review registrations.</p>
           
-          {/* Debug information for development */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="p-4 bg-foreground/5 rounded-lg text-xs space-y-2">
-              <p><strong>Debug Info:</strong></p>
-              <p>Event ID: {id}</p>
-              <p>Event Host Address: {event.hostAddress || 'undefined'}</p>
-              <p>Connected Wallet: {address || 'not connected'}</p>
-              <p>Connected Wallet (lowercase): {address?.toLowerCase() || 'N/A'}</p>
-              <p>Addresses Match: {event.hostAddress === address?.toLowerCase() ? 'Yes' : 'No'}</p>
-              <p>Is Host: {isHost ? 'Yes' : 'No'}</p>
-            </div>
-          )}
+                      {/* Debug information for development */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="p-4 bg-foreground/5 rounded-lg text-xs space-y-2">
+                <p><strong>Debug Info:</strong></p>
+                <p>Event ID: {id}</p>
+                <p>Event Host Address: {event.hostAddress || 'undefined'}</p>
+                <p>Connected Wallet: {address || 'not connected'}</p>
+                <p>Connected Wallet (lowercase): {address?.toLowerCase() || 'N/A'}</p>
+                <p>Addresses Match: {event.hostAddress === address?.toLowerCase() ? 'Yes' : 'No'}</p>
+                <p>Is Host: {isHost ? 'Yes' : 'No'}</p>
+                
+                {/* Fix button for wrong hostAddress */}
+                {address && event.hostAddress !== address?.toLowerCase() && (
+                  <div className="mt-3 p-3 bg-foreground/10 rounded border border-foreground/20">
+                    <p className="text-xs text-foreground/80 mb-2">
+                      <strong>Issue detected:</strong> Event has wrong hostAddress. This usually happens when events were created with the old system.
+                    </p>
+                    <button 
+                      onClick={fixHostAddress}
+                      className="btn-primary text-xs px-3 py-1"
+                    >
+                      Fix Host Address
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           
           <div className="p-4 bg-foreground/5 rounded-lg">
             <p className="text-sm font-medium mb-2">Troubleshooting:</p>
