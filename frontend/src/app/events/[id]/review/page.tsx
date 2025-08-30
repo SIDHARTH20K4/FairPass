@@ -23,9 +23,9 @@ type Submission = {
 
 export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = React.use(params);
-  const { events } = useEvents();
+  const { events, loading } = useEvents();
   const event = events.find((e) => e.id === id);
-  const { address } = useAccount();
+  const { address, isConnected: isWalletConnected } = useAccount();
   const [subs, setSubs] = useState<Submission[]>([]);
 
   useEffect(() => {
@@ -56,6 +56,16 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
   }, [id]);
 
   if (!event) {
+    if (loading) {
+      return (
+        <main className="mx-auto max-w-3xl px-4 py-12">
+          <div className="text-center">
+            <div className="w-8 h-8 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-sm text-foreground/60">Loading event...</p>
+          </div>
+        </main>
+      );
+    }
     return (
       <main className="mx-auto max-w-3xl px-4 py-12">
         <p className="text-sm">Event not found.</p>
@@ -63,12 +73,60 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
     );
   }
 
+  // Check wallet connection first
+  if (!isWalletConnected) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-12">
+        <div className="mb-6"><Link href={`/events/${id}`} className="text-sm hover:underline">← Back to event</Link></div>
+        <div className="space-y-4">
+          <p className="text-sm">Wallet not connected. Please connect your wallet to review registrations.</p>
+          <p className="text-sm text-foreground/70">Make sure you're connected with the same wallet that created this event.</p>
+        </div>
+      </main>
+    );
+  }
+
+  // Debug information
+  console.log('Review Page Debug:', {
+    eventId: id,
+    eventHostAddress: event.hostAddress,
+    connectedAddress: address,
+    connectedAddressLower: address?.toLowerCase(),
+    isHost: event.hostAddress && event.hostAddress === address?.toLowerCase(),
+    eventData: event
+  });
+
   const isHost = event.hostAddress && event.hostAddress === address?.toLowerCase();
   if (!isHost) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-12">
         <div className="mb-6"><Link href={`/events/${id}`} className="text-sm hover:underline">← Back to event</Link></div>
-        <p className="text-sm">Not authorized. Connect as the host wallet to review registrations.</p>
+        <div className="space-y-4">
+          <p className="text-sm">Not authorized. Connect as the host wallet to review registrations.</p>
+          
+          {/* Debug information for development */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="p-4 bg-foreground/5 rounded-lg text-xs space-y-2">
+              <p><strong>Debug Info:</strong></p>
+              <p>Event ID: {id}</p>
+              <p>Event Host Address: {event.hostAddress || 'undefined'}</p>
+              <p>Connected Wallet: {address || 'not connected'}</p>
+              <p>Connected Wallet (lowercase): {address?.toLowerCase() || 'N/A'}</p>
+              <p>Addresses Match: {event.hostAddress === address?.toLowerCase() ? 'Yes' : 'No'}</p>
+              <p>Is Host: {isHost ? 'Yes' : 'No'}</p>
+            </div>
+          )}
+          
+          <div className="p-4 bg-foreground/5 rounded-lg">
+            <p className="text-sm font-medium mb-2">Troubleshooting:</p>
+            <ul className="text-xs text-foreground/70 space-y-1 list-disc list-inside">
+              <li>Make sure you're connected with the wallet that created this event</li>
+              <li>Check that the wallet address matches: {event.hostAddress || 'undefined'}</li>
+              <li>Try disconnecting and reconnecting your wallet</li>
+              <li>Ensure you're on the correct network</li>
+            </ul>
+          </div>
+        </div>
       </main>
     );
   }
