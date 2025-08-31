@@ -2,53 +2,41 @@
 
 import React from "react";
 
-type City = {
+type Country = {
   name: string;
   region: string; // e.g., "Asia & Pacific", "Europe" etc
   count: number;
 };
 
-const DEFAULT_CITIES: City[] = [
-  // Asia & Pacific (subset reflecting screenshot)
-  { name: "Bangkok", region: "Asia & Pacific", count: 0 },
-  { name: "Bengaluru", region: "Asia & Pacific", count: 0 },
-  { name: "Dubai", region: "Asia & Pacific", count: 0 },
-  { name: "Ho Chi Minh City", region: "Asia & Pacific", count: 0 },
-  { name: "Hong Kong", region: "Asia & Pacific", count: 0 },
-  { name: "Honolulu", region: "Asia & Pacific", count: 0 },
-  { name: "Jakarta", region: "Asia & Pacific", count: 0 },
-  { name: "Kuala Lumpur", region: "Asia & Pacific", count: 0 },
-  { name: "Manila", region: "Asia & Pacific", count: 0 },
-  { name: "Melbourne", region: "Asia & Pacific", count: 0 },
-  { name: "Mumbai", region: "Asia & Pacific", count: 0 },
-  { name: "New Delhi", region: "Asia & Pacific", count: 0 },
-  { name: "Seoul", region: "Asia & Pacific", count: 0 },
+const DEFAULT_COUNTRIES: Country[] = [
+  // Asia & Pacific
   { name: "Singapore", region: "Asia & Pacific", count: 0 },
-  { name: "Sydney", region: "Asia & Pacific", count: 0 },
-  { name: "Taipei", region: "Asia & Pacific", count: 0 },
-  { name: "Tel Aviv-Yafo", region: "Asia & Pacific", count: 0 },
-  { name: "Tokyo", region: "Asia & Pacific", count: 0 },
+  { name: "India", region: "Asia & Pacific", count: 0 },
+  { name: "Indonesia", region: "Asia & Pacific", count: 0 },
+  { name: "South Korea", region: "Asia & Pacific", count: 0 },
+  { name: "Japan", region: "Asia & Pacific", count: 0 },
+  { name: "Australia", region: "Asia & Pacific", count: 0 },
+  { name: "Taiwan", region: "Asia & Pacific", count: 0 },
+  { name: "UAE", region: "Asia & Pacific", count: 0 },
 
-  // Europe (keep concise)
-  { name: "London", region: "Europe", count: 0 },
-  { name: "Paris", region: "Europe", count: 0 },
-  { name: "Berlin", region: "Europe", count: 0 },
-  { name: "Lisbon", region: "Europe", count: 0 },
-  { name: "Amsterdam", region: "Europe", count: 0 },
+  // Europe
+  { name: "United Kingdom", region: "Europe", count: 0 },
+  { name: "France", region: "Europe", count: 0 },
+  { name: "Germany", region: "Europe", count: 0 },
+  { name: "Portugal", region: "Europe", count: 0 },
+  { name: "Netherlands", region: "Europe", count: 0 },
 
   // North America
-  { name: "San Francisco", region: "North America", count: 0 },
-  { name: "New York", region: "North America", count: 0 },
-  { name: "Toronto", region: "North America", count: 0 },
-  { name: "Austin", region: "North America", count: 0 },
+  { name: "United States", region: "North America", count: 0 },
+  { name: "Canada", region: "North America", count: 0 },
 
   // South America
-  { name: "Buenos Aires", region: "South America", count: 0 },
-  { name: "São Paulo", region: "South America", count: 0 },
+  { name: "Argentina", region: "South America", count: 0 },
+  { name: "Brazil", region: "South America", count: 0 },
 
   // Africa
-  { name: "Cape Town", region: "Africa", count: 0 },
-  { name: "Nairobi", region: "Africa", count: 0 },
+  { name: "South Africa", region: "Africa", count: 0 },
+  { name: "Kenya", region: "Africa", count: 0 },
 
   // Global
   { name: "Worldwide", region: "Worldwide", count: 0 },
@@ -67,11 +55,11 @@ export default function LocationExplorer({
   cities,
   onSelect,
 }: {
-  cities: City[];
-  onSelect: (city: string) => void;
+  cities: Country[];
+  onSelect: (country: string) => void;
 }) {
   // Merge incoming counts into defaults
-  const byName = new Map(DEFAULT_CITIES.map((c) => [c.name, { ...c }]));
+  const byName = new Map(DEFAULT_COUNTRIES.map((c) => [c.name, { ...c }]));
   for (const c of cities) {
     const base = byName.get(c.name);
     if (base) base.count = c.count;
@@ -86,14 +74,17 @@ export default function LocationExplorer({
   const filtered = merged.filter((c) => c.region === active);
 
   return (
-    <section className="mb-8">
-      <div className="flex flex-wrap gap-2 mb-4">
+    <section className="mb-12 fade-in">
+      {/* Region filter tabs */}
+      <div className="flex flex-wrap gap-3 mb-8">
         {regions.map((r) => (
           <button
             key={r}
             onClick={() => setActive(r)}
-            className={`rounded-full px-3 py-1 text-sm border ${
-              r === active ? "border-foreground bg-black/5 dark:bg-white/5" : "border-black/10 dark:border-white/10"
+            className={`px-6 py-3 rounded-full text-sm font-medium transition-all duration-200 ${
+              r === active 
+                ? "glass-card text-foreground shadow-lg" 
+                : "text-foreground/60 hover:text-foreground/80 hover:bg-foreground/5"
             }`}
           >
             {r}
@@ -101,19 +92,29 @@ export default function LocationExplorer({
         ))}
       </div>
 
-      <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        {filtered.map((c) => (
-          <li key={`${c.region}-${c.name}`}>
+      {/* Countries grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        {filtered.map((c, index) => (
+          <div key={`${c.region}-${c.name}`} className="slide-in" style={{ animationDelay: `${index * 50}ms` }}>
             <button
               onClick={() => onSelect(c.name)}
-              className="w-full text-left rounded-md border border-black/10 dark:border-white/10 px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5"
+              className="w-full text-left card p-5 hover:scale-105 transition-all duration-300 group"
             >
-              <div className="font-medium">{c.name}</div>
-              <div className="text-xs text-black/60 dark:text-white/60">{c.count} Events</div>
+              <div className="space-y-2">
+                <div className="font-semibold text-foreground group-hover:text-foreground/80 transition-colors">
+                  {c.name}
+                </div>
+                <div className="text-sm text-foreground/60">
+                  {c.count} Events
+                </div>
+              </div>
+              
+              {/* Hover effect indicator */}
+              <div className="mt-3 w-0 h-0.5 bg-foreground transition-all duration-300 group-hover:w-full"></div>
             </button>
-          </li>
+          </div>
         ))}
-      </ul>
+      </div>
     </section>
   );
 }

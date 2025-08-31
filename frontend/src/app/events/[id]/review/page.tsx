@@ -5,13 +5,15 @@ import { useEvents } from "@/hooks/useEvents";
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 import { uploadImageToIPFS, uploadJsonToIPFS } from "@/lib/ipfs";
+import { apiUpdateEvent } from "@/lib/api";
+import React from "react";
 
 const SUBMIT_KEY = (id: string) => `fairpass.events.submissions.${id}`;
 
 type Submission = {
   values: Record<string, string>;
   at: number;
-  status: "pending" | "approved";
+  status: "pending" | "approved" | "rejected";
   address?: string;
   qrCid?: string;
   qrUrl?: string;
@@ -20,19 +22,70 @@ type Submission = {
   signature?: string;
 };
 
-export default function ReviewSubmissionsPage({ params }: { params: { id: string } }) {
-  const { id } = params;
-  const { events } = useEvents();
+export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = React.use(params);
+  const { events, loading } = useEvents();
   const event = events.find((e) => e.id === id);
-  const { address } = useAccount();
+  const { address, isConnected: isWalletConnected } = useAccount();
   const [subs, setSubs] = useState<Submission[]>([]);
 
   useEffect(() => {
-    const existing: Submission[] = JSON.parse(localStorage.getItem(SUBMIT_KEY(id)) || "[]");
-    setSubs(existing);
+    async function load() {
+      try {
+        const res = await fetch(`/api/events/${id}/registrations`);
+        const data = await res.json();
+        // Expecting backend shape; map to local type minimally
+        const mapped: Submission[] = (data || []).map((s: any) => ({
+          values: s.values || {},
+          at: new Date(s.createdAt || Date.now()).getTime(),
+          status: s.status || "pending",
+          address: s.address,
+          qrCid: s.qrCid,
+          qrUrl: s.qrUrl,
+          jsonCid: s.jsonCid,
+          jsonUrl: s.jsonUrl,
+          signature: s.signature,
+        }));
+        setSubs(mapped);
+      } catch (e) {
+        console.error(e);
+        const existing: Submission[] = JSON.parse(localStorage.getItem(SUBMIT_KEY(id)) || "[]");
+        setSubs(existing);
+      }
+    }
+    load();
   }, [id]);
 
+  // Function to fix wrong hostAddress
+  async function fixHostAddress() {
+    if (!address) return;
+    
+    try {
+      console.log('Fixing hostAddress for event:', id);
+      console.log('Old hostAddress:', event.hostAddress);
+      console.log('New hostAddress:', address.toLowerCase());
+      
+      await apiUpdateEvent(id, { hostAddress: address.toLowerCase() });
+      
+      // Refresh the page to get updated event data
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to fix hostAddress:', error);
+      alert('Failed to fix hostAddress. Please try again.');
+    }
+  }
+
   if (!event) {
+    if (loading) {
+      return (
+        <main className="mx-auto max-w-3xl px-4 py-12">
+          <div className="text-center">
+            <div className="w-8 h-8 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-sm text-foreground/60">Loading event...</p>
+          </div>
+        </main>
+      );
+    }
     return (
       <main className="mx-auto max-w-3xl px-4 py-12">
         <p className="text-sm">Event not found.</p>
@@ -40,12 +93,75 @@ export default function ReviewSubmissionsPage({ params }: { params: { id: string
     );
   }
 
+  // Check wallet connection first
+  if (!isWalletConnected) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-12">
+        <div className="mb-6"><Link href={`/events/${id}`} className="text-sm hover:underline">← Back to event</Link></div>
+        <div className="space-y-4">
+          <p className="text-sm">Wallet not connected. Please connect your wallet to review registrations.</p>
+          <p className="text-sm text-foreground/70">Make sure you're connected with the same wallet that created this event.</p>
+        </div>
+      </main>
+    );
+  }
+
+  // Debug information
+  console.log('Review Page Debug:', {
+    eventId: id,
+    eventHostAddress: event.hostAddress,
+    connectedAddress: address,
+    connectedAddressLower: address?.toLowerCase(),
+    isHost: event.hostAddress && event.hostAddress === address?.toLowerCase(),
+    eventData: event
+  });
+
   const isHost = event.hostAddress && event.hostAddress === address?.toLowerCase();
   if (!isHost) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-12">
         <div className="mb-6"><Link href={`/events/${id}`} className="text-sm hover:underline">← Back to event</Link></div>
-        <p className="text-sm">Not authorized. Connect as the host wallet to review registrations.</p>
+        <div className="space-y-4">
+          <p className="text-sm">Not authorized. Connect as the host wallet to review registrations.</p>
+          
+                      {/* Debug information for development */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="p-4 bg-foreground/5 rounded-lg text-xs space-y-2">
+                <p><strong>Debug Info:</strong></p>
+                <p>Event ID: {id}</p>
+                <p>Event Host Address: {event.hostAddress || 'undefined'}</p>
+                <p>Connected Wallet: {address || 'not connected'}</p>
+                <p>Connected Wallet (lowercase): {address?.toLowerCase() || 'N/A'}</p>
+                <p>Addresses Match: {event.hostAddress === address?.toLowerCase() ? 'Yes' : 'No'}</p>
+                <p>Is Host: {isHost ? 'Yes' : 'No'}</p>
+                
+                {/* Fix button for wrong hostAddress */}
+                {address && event.hostAddress !== address?.toLowerCase() && (
+                  <div className="mt-3 p-3 bg-foreground/10 rounded border border-foreground/20">
+                    <p className="text-xs text-foreground/80 mb-2">
+                      <strong>Issue detected:</strong> Event has wrong hostAddress. This usually happens when events were created with the old system.
+                    </p>
+                    <button 
+                      onClick={fixHostAddress}
+                      className="btn-primary text-xs px-3 py-1"
+                    >
+                      Fix Host Address
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          
+          <div className="p-4 bg-foreground/5 rounded-lg">
+            <p className="text-sm font-medium mb-2">Troubleshooting:</p>
+            <ul className="text-xs text-foreground/70 space-y-1 list-disc list-inside">
+              <li>Make sure you're connected with the wallet that created this event</li>
+              <li>Check that the wallet address matches: {event.hostAddress || 'undefined'}</li>
+              <li>Try disconnecting and reconnecting your wallet</li>
+              <li>Ensure you're on the correct network</li>
+            </ul>
+          </div>
+        </div>
       </main>
     );
   }
@@ -59,26 +175,38 @@ export default function ReviewSubmissionsPage({ params }: { params: { id: string
     let jsonUrl = s.jsonUrl;
     let jsonCid = s.jsonCid;
 
+    // Call backend to approve: need commitment saved server-side with submission
+    // We cannot reconstruct commitment here; ensure register stored it
+    await fetch(`/api/approveUsers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId: id, commitment: (s as any).commitment }),
+    });
+
+    // Optional: generate IPFS artifacts with minimal ZK QR payload
     if (!qrUrl || !jsonUrl) {
-      const payload = {
-        eventId: id,
-        eventName: event.name,
-        address: s.address,
-        ...s.values,
-        status: "approved" as const,
-        ts: s.at,
-        signature: s.signature,
-      };
-      const qrData = encodeURIComponent(JSON.stringify(payload));
+      const qrPayload = { eventId: id, commitment: (s as any).commitment };
+      const qrData = encodeURIComponent(JSON.stringify(qrPayload));
       const qrUpload = await uploadImageToIPFS(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrData}`);
       qrUrl = qrUpload.url; qrCid = qrUpload.cid;
-      const jsonUpload = await uploadJsonToIPFS(payload);
+      const jsonUpload = await uploadJsonToIPFS(qrPayload);
       jsonUrl = jsonUpload.url; jsonCid = jsonUpload.cid;
     }
 
     const next = subs.map((item, i) => i === index ? { ...item, status: "approved", qrUrl, qrCid, jsonUrl, jsonCid } : item);
     setSubs(next);
+  }
+
+  function reject(index: number) {
+    const next = subs.map((item, i) => i === index ? { ...item, status: "rejected" } : item);
+    setSubs(next);
     localStorage.setItem(SUBMIT_KEY(id), JSON.stringify(next));
+  }
+
+  function statusClasses(status: Submission["status"]) {
+    if (status === "approved") return "border-green-400 text-green-400";
+    if (status === "rejected") return "border-red-400 text-red-400";
+    return "border-yellow-400 text-yellow-400";
   }
 
   return (
@@ -102,9 +230,12 @@ export default function ReviewSubmissionsPage({ params }: { params: { id: string
                 <div className="text-xs text-black/60 dark:text-white/60">{s.address}</div>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`text-xs rounded px-2 py-0.5 border ${s.status === "approved" ? "border-green-400 text-green-400" : "border-yellow-400 text-yellow-400"}`}>{s.status}</span>
+                <span className={`text-xs rounded px-2 py-0.5 border ${statusClasses(s.status)}`}>{s.status}</span>
                 {s.status !== "approved" && (
                   <button onClick={() => approve(idx)} className="text-sm rounded-md border border-black/10 dark:border-white/10 px-3 py-1 hover:bg-black/5 dark:hover:bg-white/5">Approve</button>
+                )}
+                {s.status !== "rejected" && (
+                  <button onClick={() => reject(idx)} className="text-sm rounded-md border border-black/10 dark:border-white/10 px-3 py-1 hover:bg-black/5 dark:hover:bg-white/5">Reject</button>
                 )}
               </div>
             </li>
