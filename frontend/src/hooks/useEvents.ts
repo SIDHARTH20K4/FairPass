@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { apiCreateEvent, apiListEvents, apiUpdateEvent } from "@/lib/api";
 
 export type FormField = {
   id: string;
@@ -46,14 +47,41 @@ function writeStored(events: EventItem[]) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
 }
 
+const HAS_API = !!process.env.NEXT_PUBLIC_API_URL;
+
 export function useEvents() {
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
 
-  useEffect(() => {
-    setEvents(readStored());
+  const loadEvents = useCallback(async (location?: string) => {
+    try {
+      setLoading(true);
+      if (HAS_API) {
+        const list = await apiListEvents(location);
+        setEvents(list as EventItem[]);
+      } else {
+        const stored = readStored();
+        if (location && location !== 'Worldwide') {
+          setEvents(stored.filter(e => e.location === location));
+        } else {
+          setEvents(stored);
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const addEvent = useCallback((e: Omit<EventItem, "id" | "createdAt">) => {
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
+
+  const addEvent = useCallback(async (e: Omit<EventItem, "id" | "createdAt">) => {
+    if (HAS_API) {
+      const created = await apiCreateEvent(e);
+      setEvents((prev) => [created as EventItem, ...prev]);
+      return (created as EventItem).id;
+    }
     const id = `${Date.now()}`;
     const next = [{ id, createdAt: Date.now(), ...e }, ...readStored()];
     setEvents(next);
@@ -61,7 +89,12 @@ export function useEvents() {
     return id;
   }, []);
 
-  const updateEvent = useCallback((id: string, patch: Partial<EventItem>) => {
+  const updateEvent = useCallback(async (id: string, patch: Partial<EventItem>) => {
+    if (HAS_API) {
+      const updated = await apiUpdateEvent(id, patch);
+      setEvents((prev) => prev.map((ev) => (ev.id === id ? (updated as EventItem) : ev)));
+      return;
+    }
     const current = readStored();
     const next = current.map((ev) => (ev.id === id ? { ...ev, ...patch } : ev));
     setEvents(next);
@@ -73,16 +106,12 @@ export function useEvents() {
     writeStored([]);
   }, []);
 
-  const byLocation = useCallback(
-    (loc: string | "All") =>
-      (loc === "All" ? events : events.filter((e) => e.location === loc)),
-    [events]
-  );
-
-  const locations = useMemo(() => {
-    const set = new Set(events.map((e) => e.location));
-    return ["All", ...Array.from(set)];
-  }, [events]);
-
-  return { events, addEvent, updateEvent, clearAll, byLocation, locations };
+  return {
+    events,
+    loading,
+    addEvent,
+    updateEvent,
+    clearAll,
+    loadEvents
+  };
 }

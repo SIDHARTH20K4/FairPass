@@ -5,20 +5,22 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 
 export default function Header() {
   return (
-    <header className="w-full border-b border-black/10 dark:border-white/10">
+    <header className="w-full glass-card border-b border-foreground/10 sticky top-0 z-50">
       <div className="mx-auto max-w-6xl px-4 h-16 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-          <span className="inline-block w-2.5 h-2.5 rounded-full bg-foreground" />
+        <Link href="/" className="flex items-center gap-3 font-bold text-xl text-foreground hover:text-foreground/80 transition-colors">
+          <div className="w-3 h-3 rounded-full bg-foreground"></div>
           <span>FairPass</span>
         </Link>
-        <nav className="flex items-center gap-4">
-          <Link href="/events" className="text-sm hover:underline">
-            Explore events
+        <nav className="flex items-center gap-6">
+          <Link href="/events" className="text-sm font-medium text-foreground/70 hover:text-foreground transition-colors">
+            Explore Events
           </Link>
-          <Link href="/host" className="text-sm hover:underline">
-            Host
+          <Link href="/host/signin" className="text-sm font-medium text-foreground/70 hover:text-foreground transition-colors">
+            Host Events
           </Link>
-          <ConnectButton />
+          <div className="ml-2">
+            <ConnectButton />
+          </div>
         </nav>
       </div>
     </header>
