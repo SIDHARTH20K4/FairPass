@@ -1,13 +1,14 @@
 "use client";
 
 import { useEvents } from "@/hooks/useEvents";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAccount, useSignMessage } from "wagmi";
 import CustomDatePicker from "@/components/DatePicker";
 import SimpleDatePicker from "@/components/SimpleDatePicker";
 import { uploadImageToIPFS, uploadJsonToIPFS } from "@/lib/ipfs";
 import { Identity } from "@semaphore-protocol/identity";
+import QRTicket from "@/components/tickets/QRticket";
 import React from "react";
 
 const SUBMIT_KEY = (id: string) => `fairpass.events.submissions.${id}`;
@@ -34,6 +35,7 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
   const [values, setValues] = useState<Record<string, string>>({ name: "", dob: "", email: "", phone: "" });
   const [submitted, setSubmitted] = useState<Submission | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(false);
 
   if (!event) {
     return (
@@ -132,6 +134,48 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
     }
   }
 
+  // Function to check approval status from backend
+  async function checkApprovalStatus() {
+    if (!address || !submitted) return;
+    
+    setCheckingStatus(true);
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/registrations/events/${id}/registrations/user/${address.toLowerCase()}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'approved' && data.qrUrl) {
+          // Update local submission with backend data
+          const updatedSubmission = {
+            ...submitted,
+            status: 'approved' as const,
+            qrUrl: data.qrUrl,
+            qrCid: data.qrCid,
+            jsonUrl: data.jsonUrl,
+            jsonCid: data.jsonCid
+          };
+          setSubmitted(updatedSubmission);
+          
+          // Update localStorage
+          const existing: Submission[] = JSON.parse(localStorage.getItem(SUBMIT_KEY(id)) || "[]");
+          const updated = existing.map(s => s.address === address.toLowerCase() ? updatedSubmission : s);
+          localStorage.setItem(SUBMIT_KEY(id), JSON.stringify(updated));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check approval status:', error);
+    } finally {
+      setCheckingStatus(false);
+    }
+  }
+
+  // Check approval status periodically for pending registrations
+  useEffect(() => {
+    if (submitted?.status === 'pending' && address) {
+      const interval = setInterval(checkApprovalStatus, 10000); // Check every 10 seconds
+      return () => clearInterval(interval);
+    }
+  }, [submitted?.status, address, id]);
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-12">
       <div className="mb-6">
@@ -140,33 +184,86 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
       <h1 className="text-2xl font-semibold tracking-tight mb-6">Register for {event.name}</h1>
 
       {submitted ? (
-        <div className="rounded-md border border-black/10 dark:border-white/10 p-4 space-y-2">
-          <p className="text-sm">Registration received.</p>
-          {submitted.status === "pending" ? (
-            <p className="text-sm text-yellow-500">Approval pending. You'll receive your QR once approved.</p>
-          ) : (
-            <p className="text-sm text-green-500">You're approved!</p>
-          )}
+        <div className="space-y-6">
+          {/* Status Information */}
+          <div className="card p-4 text-center">
+            <div className="space-y-2">
+              <p className="text-sm text-foreground/70">Registration Status</p>
+              {submitted.status === "pending" ? (
+                <div className="space-y-2">
+                  <p className="text-lg font-medium text-yellow-600">⏳ Approval Pending</p>
+                  <p className="text-sm text-foreground/70">
+                    Your registration has been submitted and is waiting for host approval.
+                  </p>
+                  {checkingStatus ? (
+                    <p className="text-xs text-foreground/60">Checking approval status...</p>
+                  ) : (
+                    <button 
+                      onClick={checkApprovalStatus}
+                      className="btn-secondary text-xs px-3 py-1"
+                    >
+                      Check Status
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-lg font-medium text-green-600">✅ Approved!</p>
+                  <p className="text-sm text-foreground/70">
+                    Your registration has been approved. You can now attend the event!
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* QR Ticket Display for Approved Users */}
           {submitted.status === "approved" && submitted.qrUrl && (
-            <div className="space-y-1">
-              <p className="text-sm">Your QR (stored on IPFS):</p>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={submitted.qrUrl} alt="QR" className="w-36 h-36" />
-              <a className="text-sm underline" href={submitted.qrUrl} target="_blank" rel="noreferrer">{submitted.qrUrl}</a>
-            </div>
+            <QRTicket
+              qrUrl={submitted.qrUrl}
+              eventName={event.name}
+              participantName={submitted.values.name || 'Anonymous'}
+              participantAddress={submitted.address || ''}
+              approvalDate={new Date().toISOString()}
+              qrCid={submitted.qrCid}
+              jsonCid={submitted.jsonCid}
+            />
           )}
-          {submitted.status === "approved" && submitted.jsonUrl && (
-            <div className="space-y-1">
-              <p className="text-sm">Registration JSON (IPFS):</p>
-              <a className="text-sm underline" href={submitted.jsonUrl} target="_blank" rel="noreferrer">{submitted.jsonUrl}</a>
+
+          {/* Registration Details */}
+          <div className="card p-4">
+            <h3 className="text-sm font-medium mb-3">Registration Details</h3>
+            <div className="space-y-2 text-sm">
+              {Object.entries(submitted.values).map(([key, value]) => (
+                <div key={key} className="flex justify-between">
+                  <span className="text-foreground/70 capitalize">{key}:</span>
+                  <span className="font-medium">{value}</span>
+                </div>
+              ))}
+              <div className="flex justify-between">
+                <span className="text-foreground/70">Wallet Address:</span>
+                <span className="font-mono text-xs">{submitted.address}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-foreground/70">Submitted:</span>
+                <span>{new Date(submitted.at).toLocaleString()}</span>
+              </div>
             </div>
-          )}
+          </div>
         </div>
       ) : (
-        <form onSubmit={submit} className="space-y-4">
+        <form onSubmit={submit} className="card p-6 space-y-6">
           <div className="space-y-2">
-            <label className="block text-sm font-medium" htmlFor="name">Full name</label>
-            <input id="name" type="text" required value={values.name} onChange={(e) => setValues((v) => ({ ...v, name: e.target.value }))} className="w-full rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm outline-none" />
+            <label className="block text-sm font-medium text-foreground" htmlFor="name">Full name</label>
+            <input 
+              id="name" 
+              type="text" 
+              required 
+              value={values.name} 
+              onChange={(e) => setValues((v) => ({ ...v, name: e.target.value }))} 
+              className="input" 
+              placeholder="Enter your full name"
+            />
           </div>
           <div className="space-y-2">
             <SimpleDatePicker 
@@ -177,14 +274,43 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
             />
           </div>
           <div className="space-y-2">
-            <label className="block text-sm font-medium" htmlFor="email">Email</label>
-            <input id="email" type="email" required value={values.email} onChange={(e) => setValues((v) => ({ ...v, email: e.target.value }))} className="w-full rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm outline-none" />
+            <label className="block text-sm font-medium text-foreground" htmlFor="email">Email</label>
+            <input 
+              id="email" 
+              type="email" 
+              required 
+              value={values.email} 
+              onChange={(e) => setValues((v) => ({ ...v, email: e.target.value }))} 
+              className="input" 
+              placeholder="Enter your email address"
+            />
           </div>
           <div className="space-y-2">
-            <label className="block text-sm font-medium" htmlFor="phone">Phone number</label>
-            <input id="phone" type="tel" required value={values.phone} onChange={(e) => setValues((v) => ({ ...v, phone: e.target.value }))} className="w-full rounded-md border border-black/10 dark:border-white/10 bg-transparent px-3 py-2 text-sm outline-none" />
+            <label className="block text-sm font-medium text-foreground" htmlFor="phone">Phone number</label>
+            <input 
+              id="phone" 
+              type="tel" 
+              required 
+              value={values.phone} 
+              onChange={(e) => setValues((v) => ({ ...v, phone: e.target.value }))} 
+              className="input" 
+              placeholder="Enter your phone number"
+            />
           </div>
-          <button disabled={uploading} type="submit" className="inline-flex items-center rounded-md border border-black/10 dark:border-white/10 px-4 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50">{uploading ? "Submitting..." : "Submit"}</button>
+          <button 
+            disabled={uploading} 
+            type="submit" 
+            className="btn-primary w-full"
+          >
+            {uploading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin mr-2"></div>
+                Submitting...
+              </>
+            ) : (
+              "Submit Registration"
+            )}
+          </button>
         </form>
       )}
     </main>

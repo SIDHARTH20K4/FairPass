@@ -5,9 +5,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEvents } from "@/hooks/useEvents";
 import Markdown from "@/components/Markdown";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import React from "react";
 import { useAccount } from "wagmi";
+import QRTicket from "@/components/tickets/QRticket";
+import Toast from "@/components/Toast";
 
 const SUBMIT_KEY = (id: string) => `fairpass.events.submissions.${id}`;
 
@@ -27,7 +29,66 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const { address } = useAccount();
   const [myStatus, setMyStatus] = useState<Submission["status"] | null>(null);
   const [mySub, setMySub] = useState<Submission | null>(null);
+  const [checkingStatus, setCheckingStatus] = useState(false);
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'warning' | 'error' } | null>(null);
 
+  // Function to check registration status from backend
+  const checkRegistrationStatus = useCallback(async () => {
+    if (!address || !mySub) return;
+    
+    setCheckingStatus(true);
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/registrations/events/${id}/registrations/user/${address.toLowerCase()}`);
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Update local state with backend data
+        const updatedSubmission = {
+          ...mySub,
+          status: data.status,
+          qrUrl: data.qrUrl,
+          qrCid: data.qrCid,
+          jsonUrl: data.jsonUrl,
+          jsonCid: data.jsonCid
+        };
+        
+        // Check if status changed
+        const statusChanged = myStatus !== data.status;
+        
+        setMySub(updatedSubmission);
+        setMyStatus(data.status);
+        
+        // Update localStorage
+        const subs: Submission[] = JSON.parse(localStorage.getItem(SUBMIT_KEY(id)) || "[]");
+        const updated = subs.map(s => s.address === address.toLowerCase() ? updatedSubmission : s);
+        localStorage.setItem(SUBMIT_KEY(id), JSON.stringify(updated));
+        
+        setLastChecked(new Date());
+        
+        // Show notification if status changed
+        if (statusChanged) {
+          if (data.status === 'approved') {
+            setToast({ 
+              message: '🎉 Your registration has been approved! You can now attend the event.', 
+              type: 'success' 
+            });
+          } else if (data.status === 'rejected') {
+            setToast({ 
+              message: '❌ Your registration has been rejected. Please contact the event host for more information.', 
+              type: 'error' 
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check registration status:', error);
+    } finally {
+      setCheckingStatus(false);
+    }
+  }, [address, id, mySub]);
+
+  // Check status from localStorage on mount
   useEffect(() => {
     const subs: Submission[] = JSON.parse(localStorage.getItem(SUBMIT_KEY(id)) || "[]");
     const mine = subs.filter((s) => s.address && s.address === address?.toLowerCase());
@@ -36,10 +97,25 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     setMySub(last || null);
   }, [id, address]);
 
+  // Auto-check status every 15 seconds for pending registrations
+  useEffect(() => {
+    if (myStatus === 'pending' && address) {
+      const interval = setInterval(checkRegistrationStatus, 15000);
+      return () => clearInterval(interval);
+    }
+  }, [myStatus, address, checkRegistrationStatus]);
+
+  // Check status when component mounts if user has a pending registration
+  useEffect(() => {
+    if (myStatus === 'pending' && address) {
+      checkRegistrationStatus();
+    }
+  }, [myStatus, address, checkRegistrationStatus]);
+
   const isHost = event?.hostAddress && event.hostAddress === address?.toLowerCase();
 
   if (!event) {
-    return (
+  return (
       <main className="min-h-screen flex items-center justify-center">
         <div className="text-center card p-12 max-w-md mx-auto">
           <div className="w-16 h-16 bg-foreground/5 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -51,7 +127,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
           <p className="text-foreground/60 mb-6">The event you're looking for doesn't exist or has been removed.</p>
           <Link href="/events" className="btn-primary">
             Browse All Events
-          </Link>
+        </Link>
         </div>
       </main>
     );
@@ -59,6 +135,14 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
   return (
     <main className="min-h-screen">
+      {/* Toast Notifications */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
       {/* Hero Banner Section */}
       {event.bannerUrl && (
         <section className="relative h-96 overflow-hidden">
@@ -78,7 +162,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
                 Back to Events
-              </Link>
+            </Link>
               
               <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4 drop-shadow-lg">
                 {event.name}
@@ -104,9 +188,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                   </svg>
                   <span className="font-medium">{event.time}</span>
                 </div>
-              </div>
+        </div>
+      </div>
             </div>
-          </div>
         </section>
       )}
 
@@ -128,9 +212,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                     {event.approvalNeeded && (
                       <span className="px-3 py-1 rounded-full text-sm font-medium glass border border-foreground/10 text-foreground/70">
                         Approval Required
-                      </span>
-                    )}
-                  </div>
+                </span>
+              )}
+            </div>
                   
                   {myStatus && (
                     <div className="flex items-center gap-2">
@@ -162,38 +246,38 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                     >
                       Edit Event
                     </Link>
-                  </div>
-                )}
+                </div>
+            )}
               </div>
 
               {/* Event Description */}
-              {event.eventDescription && (
+          {event.eventDescription && (
                 <div className="space-y-4">
                   <h2 className="text-2xl font-semibold text-foreground">About This Event</h2>
                   <div className="prose prose-foreground max-w-none">
-                    <Markdown content={event.eventDescription} />
+              <Markdown content={event.eventDescription} />
                   </div>
                 </div>
-              )}
+          )}
 
               {/* Organization Info */}
-              {(event.organization || event.organizationDescription) && (
+          {(event.organization || event.organizationDescription) && (
                 <div className="space-y-4 pt-6 border-t border-foreground/10">
                   <h2 className="text-2xl font-semibold text-foreground">Host Organization</h2>
-                  {event.organization && (
+              {event.organization && (
                     <h3 className="text-lg font-medium text-foreground">{event.organization}</h3>
-                  )}
-                  {event.organizationDescription && (
-                    <p className="text-foreground/70 leading-relaxed whitespace-pre-wrap">
-                      {event.organizationDescription}
-                    </p>
-                  )}
-                </div>
               )}
+              {event.organizationDescription && (
+                    <p className="text-foreground/70 leading-relaxed whitespace-pre-wrap">
+                  {event.organizationDescription}
+                </p>
+              )}
+                </div>
+          )}
             </div>
 
             {/* Location Map */}
-            {(event.lat && event.lng) && (
+          {(event.lat && event.lng) && (
               <div className="card p-8 fade-in">
                 <h2 className="text-2xl font-semibold text-foreground mb-6">Location</h2>
                 <div className="rounded-xl overflow-hidden border border-foreground/10">
@@ -214,38 +298,102 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
           <div className="space-y-6">
             {/* Registration Status */}
             <div className="card p-6 fade-in">
-              <h3 className="text-lg font-semibold text-foreground mb-4">Registration Status</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-foreground">Registration Status</h3>
+                {myStatus && (
+                  <div className="flex items-center gap-2">
+                    {checkingStatus ? (
+                      <div className="w-4 h-4 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin"></div>
+                    ) : (
+                      <button 
+                        onClick={checkRegistrationStatus}
+                        className="text-xs text-primary hover:underline"
+                        title="Check for status updates"
+                      >
+                        Refresh
+                      </button>
+                    )}
+                    {lastChecked && (
+                      <span className="text-xs text-foreground/50">
+                        {lastChecked.toLocaleTimeString()}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
               
               {myStatus ? (
                 <div className="space-y-4">
                   {myStatus === "approved" && mySub?.qrUrl ? (
-                    <div className="text-center space-y-3">
-                      <div className="glass rounded-xl p-4">
-                        <img 
-                          src={mySub.qrUrl} 
-                          alt="Your QR Code" 
-                          className="w-32 h-32 mx-auto rounded-lg"
-                        />
+                    <div className="space-y-4">
+                      {/* Status Badge */}
+                      <div className="text-center">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                          ✅ Approved
+                        </span>
                       </div>
-                      <p className="text-sm text-foreground/70">Your ticket QR code</p>
-                      <a 
-                        href={mySub.qrUrl} 
-                        target="_blank" 
-                        rel="noreferrer" 
-                        className="btn-secondary text-sm w-full"
-                      >
-                        Download QR Code
-                      </a>
+                      
+                      {/* QR Ticket */}
+                      <QRTicket
+                        qrUrl={mySub.qrUrl}
+                        eventName={event.name}
+                        participantName={mySub.values.name || 'Anonymous'}
+                        participantAddress={mySub.address || ''}
+                        approvalDate={new Date().toISOString()}
+                        qrCid={mySub.qrCid}
+                        jsonCid={mySub.jsonCid}
+                      />
+                      
+                      {/* Last Updated Info */}
+                      {lastChecked && (
+                        <div className="text-center text-xs text-foreground/60">
+                          Last updated: {lastChecked.toLocaleTimeString()}
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <div className="w-16 h-16 bg-warning/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-8 h-8 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  ) : myStatus === "pending" ? (
+                    <div className="text-center py-8 space-y-4">
+                      <div className="w-16 h-16 bg-yellow-100 dark:bg-yellow-900/20 rounded-full flex items-center justify-center mx-auto">
+                        <svg className="w-8 h-8 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                       </div>
-                      <p className="text-foreground/70">Your registration is pending approval</p>
+                      <div className="space-y-2">
+                        <p className="text-foreground font-medium">⏳ Approval Pending</p>
+                        <p className="text-sm text-foreground/70">
+                          Your registration has been submitted and is waiting for host approval.
+                        </p>
+                        <p className="text-xs text-foreground/60">
+                          We'll automatically check for updates every 15 seconds.
+                        </p>
+                      </div>
+                      
+                      {/* Registration Details */}
+                      {mySub && (
+                        <div className="text-left bg-foreground/5 rounded-lg p-4 space-y-2">
+                          <p className="text-sm font-medium text-foreground">Registration Details:</p>
+                          {Object.entries(mySub.values).map(([key, value]) => (
+                            <div key={key} className="flex justify-between text-xs">
+                              <span className="text-foreground/70 capitalize">{key}:</span>
+                              <span className="font-medium">{value}</span>
+                            </div>
+                          ))}
+                          <div className="flex justify-between text-xs">
+                            <span className="text-foreground/70">Submitted:</span>
+                            <span>{new Date(mySub.at).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 bg-foreground/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-foreground/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.29-1.009-5.824-2.562M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </div>
+                      <p className="text-foreground/70">Registration status unknown</p>
+              </div>
                   )}
                 </div>
               ) : (

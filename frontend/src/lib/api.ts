@@ -4,8 +4,15 @@ export type ApiEvent = any;
 export type ApiSubmission = any;
 
 async function apiFetch(path: string, init?: RequestInit) {
-  if (!BASE_URL) throw new Error("API URL not configured");
-  const res = await fetch(`${BASE_URL}${path}`, {
+  if (!BASE_URL) {
+    console.error('API URL not configured. NEXT_PUBLIC_API_URL is:', process.env.NEXT_PUBLIC_API_URL);
+    throw new Error("API URL not configured. Please set NEXT_PUBLIC_API_URL environment variable.");
+  }
+  
+  const fullUrl = `${BASE_URL}${path}`;
+  console.log('Making API request to:', fullUrl);
+  
+  const res = await fetch(fullUrl, {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -13,10 +20,13 @@ async function apiFetch(path: string, init?: RequestInit) {
     },
     cache: "no-store",
   });
+  
   if (!res.ok) {
     const text = await res.text();
+    console.error('API error response:', res.status, text);
     throw new Error(`API error ${res.status}: ${text}`);
   }
+  
   return res.json();
 }
 

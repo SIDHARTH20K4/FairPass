@@ -71,7 +71,7 @@ const LocationMap: React.FC<LocationMapProps> = ({ lat, lng, onLocationChange })
       const newPosition: LatLngExpression = [latlng.lat, latlng.lng];
       setPosition(newPosition);
       onLocationChange(latlng.lat, latlng.lng);
-      console.log("Dragged to:", latlng);
+      
     }
   }, [onLocationChange, L]);
 

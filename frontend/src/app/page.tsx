@@ -117,8 +117,8 @@ export default function Home() {
               Join thousands of users who are already discovering and hosting amazing events on FairPass
             </p>
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
-              <Link
-                href="/events"
+          <Link
+            href="/events"
                 className="btn-primary text-base sm:text-lg px-6 sm:px-8 py-3 sm:py-4 w-full sm:w-auto"
               >
                 Start Exploring
@@ -128,7 +128,7 @@ export default function Home() {
                 className="btn-secondary text-base sm:text-lg px-6 sm:px-8 py-3 sm:py-4 w-full sm:w-auto"
               >
                 Become a Host
-              </Link>
+          </Link>
             </div>
           </div>
         </div>
