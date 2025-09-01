@@ -12,6 +12,7 @@ export interface UserQRData {
  * @param eventId - Event ID from backend or blockchain
  * @returns UserQRData
  */
+
 export function createUserQR(eventId: Number): UserQRData {
     const user = new Identity();
 
