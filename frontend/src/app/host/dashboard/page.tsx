@@ -41,11 +41,13 @@ export default function HostDashboardPage() {
   }, [authLoading, isAuthenticated, organization, router]);
 
   async function loadEvents() {
-    if (!organization?.id) return;
+    if (!organization?.address) {
+      return;
+    }
     
     try {
       setLoading(true);
-      const eventsData = await apiGetOrganizationEvents(organization.id);
+      const eventsData = await apiGetOrganizationEvents(organization.address);
       setEvents(eventsData);
       
       // Fetch participant counts for all events
@@ -55,10 +57,10 @@ export default function HostDashboardPage() {
     } catch (error) {
       console.error('Failed to load events:', error);
       alert('Failed to load events');
-    } finally {
-      setLoading(false);
+      } finally {
+        setLoading(false);
+      }
     }
-  }
 
   async function loadParticipantCounts(eventIds: string[]) {
     try {
@@ -146,6 +148,20 @@ export default function HostDashboardPage() {
           <p className="text-foreground/60">Manage your events and organization</p>
         </div>
         <div className="flex items-center gap-3">
+          <button 
+            onClick={loadEvents} 
+            disabled={loading}
+            className="btn-secondary"
+            title="Refresh events"
+          >
+            {loading ? (
+              <div className="w-4 h-4 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin"></div>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            )}
+          </button>
           <button onClick={createEvent} className="btn-primary">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -174,6 +190,8 @@ export default function HostDashboardPage() {
             </button>
           )}
         </div>
+        
+
         
         {editingOrg ? (
           <div className="space-y-4">
@@ -268,7 +286,7 @@ export default function HostDashboardPage() {
               </div>
               <div className="text-sm text-foreground/70 font-medium">Total Participants</div>
             </div>
-          </div>
+      </div>
           
           {/* Approval Events Summary */}
           {events.filter(e => e.approvalNeeded && e.status === 'published').length > 0 && (
@@ -408,8 +426,8 @@ export default function HostDashboardPage() {
             {events.filter(e => e.status === 'published').length === 0 ? (
               <div className="text-center py-8 card">
                 <p className="text-foreground/60">No published events</p>
-              </div>
-            ) : (
+        </div>
+      ) : (
               <div className="space-y-4">
                 {events.filter(e => e.status === 'published').map((e, index) => (
                   <div key={e.id} className="card p-6 slide-in" style={{ animationDelay: `${index * 100}ms` }}>
@@ -426,7 +444,7 @@ export default function HostDashboardPage() {
                             <span>{participantCounts[e.id] || 0} participants</span>
                           )}
                         </div>
-                      </div>
+              </div>
                       <div className="flex items-center gap-3 ml-6">
                         <span className="px-3 py-1 rounded-full text-xs font-medium glass border border-foreground/10">
                           Published
@@ -451,8 +469,8 @@ export default function HostDashboardPage() {
                         )}
                       </div>
                     </div>
-                  </div>
-                ))}
+              </div>
+          ))}
               </div>
             )}
           </div>

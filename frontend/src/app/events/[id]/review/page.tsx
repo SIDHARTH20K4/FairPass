@@ -11,6 +11,7 @@ import React from "react";
 const SUBMIT_KEY = (id: string) => `fairpass.events.submissions.${id}`;
 
 type Submission = {
+  id?: string; // Backend submission ID
   values: Record<string, string>;
   at: number;
   status: "pending" | "approved" | "rejected";
@@ -32,10 +33,18 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/events/${id}/registrations`);
+        // Use backend API to get registrations
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/registrations/events/${id}/registrations`);
+        
+        if (!res.ok) {
+          throw new Error(`Failed to fetch registrations: ${res.status}`);
+        }
+        
         const data = await res.json();
-        // Expecting backend shape; map to local type minimally
+        
+        // Map backend data to local type
         const mapped: Submission[] = (data || []).map((s: any) => ({
+          id: s.id, // Include the backend ID
           values: s.values || {},
           at: new Date(s.createdAt || Date.now()).getTime(),
           status: s.status || "pending",
@@ -46,34 +55,20 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
           jsonUrl: s.jsonUrl,
           signature: s.signature,
         }));
+        
         setSubs(mapped);
       } catch (e) {
-        console.error(e);
-        const existing: Submission[] = JSON.parse(localStorage.getItem(SUBMIT_KEY(id)) || "[]");
-        setSubs(existing);
+        console.error('Failed to load registrations from backend:', e);
+        // If backend fails, show empty state
+        setSubs([]);
       }
     }
     load();
   }, [id]);
 
-  // Function to fix wrong hostAddress
-  async function fixHostAddress() {
-    if (!address) return;
-    
-    try {
-      console.log('Fixing hostAddress for event:', id);
-      console.log('Old hostAddress:', event.hostAddress);
-      console.log('New hostAddress:', address.toLowerCase());
-      
-      await apiUpdateEvent(id, { hostAddress: address.toLowerCase() });
-      
-      // Refresh the page to get updated event data
-      window.location.reload();
-    } catch (error) {
-      console.error('Failed to fix hostAddress:', error);
-      alert('Failed to fix hostAddress. Please try again.');
-    }
-  }
+
+
+
 
   if (!event) {
     if (loading) {
@@ -106,15 +101,7 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
     );
   }
 
-  // Debug information
-  console.log('Review Page Debug:', {
-    eventId: id,
-    eventHostAddress: event.hostAddress,
-    connectedAddress: address,
-    connectedAddressLower: address?.toLowerCase(),
-    isHost: event.hostAddress && event.hostAddress === address?.toLowerCase(),
-    eventData: event
-  });
+
 
   const isHost = event.hostAddress && event.hostAddress === address?.toLowerCase();
   if (!isHost) {
@@ -124,43 +111,7 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
         <div className="space-y-4">
           <p className="text-sm">Not authorized. Connect as the host wallet to review registrations.</p>
           
-                      {/* Debug information for development */}
-            {process.env.NODE_ENV === 'development' && (
-              <div className="p-4 bg-foreground/5 rounded-lg text-xs space-y-2">
-                <p><strong>Debug Info:</strong></p>
-                <p>Event ID: {id}</p>
-                <p>Event Host Address: {event.hostAddress || 'undefined'}</p>
-                <p>Connected Wallet: {address || 'not connected'}</p>
-                <p>Connected Wallet (lowercase): {address?.toLowerCase() || 'N/A'}</p>
-                <p>Addresses Match: {event.hostAddress === address?.toLowerCase() ? 'Yes' : 'No'}</p>
-                <p>Is Host: {isHost ? 'Yes' : 'No'}</p>
-                
-                {/* Fix button for wrong hostAddress */}
-                {address && event.hostAddress !== address?.toLowerCase() && (
-                  <div className="mt-3 p-3 bg-foreground/10 rounded border border-foreground/20">
-                    <p className="text-xs text-foreground/80 mb-2">
-                      <strong>Issue detected:</strong> Event has wrong hostAddress. This usually happens when events were created with the old system.
-                    </p>
-                    <button 
-                      onClick={fixHostAddress}
-                      className="btn-primary text-xs px-3 py-1"
-                    >
-                      Fix Host Address
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
           
-          <div className="p-4 bg-foreground/5 rounded-lg">
-            <p className="text-sm font-medium mb-2">Troubleshooting:</p>
-            <ul className="text-xs text-foreground/70 space-y-1 list-disc list-inside">
-              <li>Make sure you're connected with the wallet that created this event</li>
-              <li>Check that the wallet address matches: {event.hostAddress || 'undefined'}</li>
-              <li>Try disconnecting and reconnecting your wallet</li>
-              <li>Ensure you're on the correct network</li>
-            </ul>
-          </div>
         </div>
       </main>
     );
@@ -170,37 +121,99 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
     const s = subs[index];
     if (!s) return;
 
-    let qrUrl = s.qrUrl;
-    let qrCid = s.qrCid;
-    let jsonUrl = s.jsonUrl;
-    let jsonCid = s.jsonCid;
-
-    // Call backend to approve: need commitment saved server-side with submission
-    // We cannot reconstruct commitment here; ensure register stored it
-    await fetch(`/api/approveUsers`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventId: id, commitment: (s as any).commitment }),
-    });
-
-    // Optional: generate IPFS artifacts with minimal ZK QR payload
-    if (!qrUrl || !jsonUrl) {
-      const qrPayload = { eventId: id, commitment: (s as any).commitment };
+    try {
+      // Generate QR code with event and participant information
+      const qrPayload = {
+        eventId: id,
+        eventName: event.name,
+        participantAddress: s.address,
+        participantName: s.values.name || s.values.Name || 'Anonymous',
+        approvalDate: new Date().toISOString(),
+        type: 'event-ticket'
+      };
+      
+      // Create QR code image
       const qrData = encodeURIComponent(JSON.stringify(qrPayload));
-      const qrUpload = await uploadImageToIPFS(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrData}`);
-      qrUrl = qrUpload.url; qrCid = qrUpload.cid;
+      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${qrData}&format=png&margin=10`;
+      
+      // Upload QR code to IPFS
+      const qrUpload = await uploadImageToIPFS(qrImageUrl);
+      
+      // Upload QR payload JSON to IPFS
       const jsonUpload = await uploadJsonToIPFS(qrPayload);
-      jsonUrl = jsonUpload.url; jsonCid = jsonUpload.cid;
-    }
+      
+      // Check if submission has backend ID
+      if (!s.id) {
+        throw new Error('This registration is missing its backend identifier. Please ensure the participant has completed their registration through the proper channels.');
+      }
 
-    const next = subs.map((item, i) => i === index ? { ...item, status: "approved", qrUrl, qrCid, jsonUrl, jsonCid } : item);
-    setSubs(next);
+      // Update submission status in backend
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/registrations/events/${id}/registrations/${s.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'approved',
+          qrCid: qrUpload.cid,
+          qrUrl: qrUpload.url,
+          jsonCid: jsonUpload.cid,
+          jsonUrl: jsonUpload.url
+        })
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Backend response error:', response.status, errorText);
+        throw new Error(`Failed to update registration status: ${response.status} - ${errorText}`);
+      }
+      
+      // Update local state
+      const next = subs.map((item, i) => i === index ? { 
+        ...item, 
+        status: "approved", 
+        qrUrl: qrUpload.url, 
+        qrCid: qrUpload.cid, 
+        jsonUrl: jsonUpload.url, 
+        jsonCid: jsonUpload.cid 
+      } : item);
+      setSubs(next);
+      
+    } catch (error) {
+      console.error('Failed to approve registration:', error);
+      alert('Failed to approve registration. Please try again.');
+    }
   }
 
-  function reject(index: number) {
-    const next = subs.map((item, i) => i === index ? { ...item, status: "rejected" } : item);
-    setSubs(next);
-    localStorage.setItem(SUBMIT_KEY(id), JSON.stringify(next));
+  async function reject(index: number) {
+    const s = subs[index];
+    if (!s) return;
+
+    try {
+      // Check if submission has backend ID
+      if (!s.id) {
+        throw new Error('This registration is missing its backend identifier. Please ensure the participant has completed their registration through the proper channels.');
+      }
+      
+      // Update submission status in backend
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/registrations/events/${id}/registrations/${s.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'rejected' })
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Backend response error:', response.status, errorText);
+        throw new Error(`Failed to update registration status: ${response.status} - ${errorText}`);
+      }
+      
+      // Update local state
+      const next = subs.map((item, i) => i === index ? { ...item, status: "rejected" } : item);
+      setSubs(next);
+      
+    } catch (error) {
+      console.error('Failed to reject registration:', error);
+      alert('Failed to reject registration. Please try again.');
+    }
   }
 
   function statusClasses(status: Submission["status"]) {
@@ -215,29 +228,85 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
         <Link href={`/events/${id}`} className="text-sm hover:underline">← Back to event</Link>
         <h1 className="text-2xl font-semibold tracking-tight">Review registrations</h1>
       </div>
+      
+
 
       {subs.length === 0 ? (
-        <p className="text-sm text-black/70 dark:text-white/70">No registrations yet.</p>
+        <div className="text-center py-8">
+          <p className="text-sm text-black/70 dark:text-white/70 mb-2">No registrations yet.</p>
+          <p className="text-xs text-black/50 dark:text-white/50">Registrations will appear here once participants sign up for your event.</p>
+        </div>
       ) : (
-        <ul className="space-y-3">
+        <ul className="space-y-4">
           {subs.map((s, idx) => (
-            <li key={idx} className="rounded-md border border-black/10 dark:border-white/10 p-3 flex items-center justify-between gap-4">
-              <div className="text-sm">
-                {Object.entries(s.values).map(([k, v]) => (
-                  <div key={k}><span className="font-medium">{k}:</span> {v}</div>
-                ))}
-                <div className="text-xs text-black/60 dark:text-white/60 mt-1">{new Date(s.at).toLocaleString()}</div>
-                <div className="text-xs text-black/60 dark:text-white/60">{s.address}</div>
+            <li key={idx} className="card p-4 space-y-3">
+              {/* Participant Information */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 space-y-2">
+                  <div className="text-sm space-y-1">
+                    {Object.entries(s.values).map(([k, v]) => (
+                      <div key={k}><span className="font-medium">{k}:</span> {v}</div>
+                    ))}
+                  </div>
+                                  <div className="text-xs text-foreground/60 space-y-1">
+                  <div>Registered: {new Date(s.at).toLocaleString()}</div>
+                  <div>Wallet: {s.address}</div>
+                </div>
+                </div>
+                
+                {/* Status and Actions */}
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs rounded px-2 py-1 border ${statusClasses(s.status)}`}>
+                    {s.status}
+                  </span>
+                  {s.status !== "approved" && (
+                    <button 
+                      onClick={() => approve(idx)} 
+                      className="btn-primary text-xs px-3 py-1"
+                    >
+                      Approve
+                    </button>
+                  )}
+                  {s.status !== "rejected" && (
+                    <button 
+                      onClick={() => reject(idx)} 
+                      className="btn-secondary text-xs px-3 py-1"
+                    >
+                      Reject
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className={`text-xs rounded px-2 py-0.5 border ${statusClasses(s.status)}`}>{s.status}</span>
-                {s.status !== "approved" && (
-                  <button onClick={() => approve(idx)} className="text-sm rounded-md border border-black/10 dark:border-white/10 px-3 py-1 hover:bg-black/5 dark:hover:bg-white/5">Approve</button>
-                )}
-                {s.status !== "rejected" && (
-                  <button onClick={() => reject(idx)} className="text-sm rounded-md border border-black/10 dark:border-white/10 px-3 py-1 hover:bg-black/5 dark:hover:bg-white/5">Reject</button>
-                )}
-              </div>
+              
+              {/* QR Code Display for Approved Participants */}
+              {s.status === "approved" && s.qrUrl && (
+                <div className="border-t border-foreground/10 pt-3">
+                  <div className="flex items-center gap-3">
+                    <div className="text-sm font-medium text-foreground">Event Ticket QR Code:</div>
+                    <a 
+                      href={s.qrUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline"
+                    >
+                      View Full Size
+                    </a>
+                  </div>
+                  <div className="mt-2 flex items-center gap-4">
+                    <img 
+                      src={s.qrUrl} 
+                      alt="Event Ticket QR Code" 
+                      className="w-24 h-24 border border-foreground/20 rounded-lg"
+                    />
+                    <div className="text-xs text-foreground/70 space-y-1">
+                      <div><strong>Event:</strong> {event.name}</div>
+                      <div><strong>Participant:</strong> {s.values.name || s.values.Name || 'Anonymous'}</div>
+                      <div><strong>Status:</strong> Approved</div>
+                      <div><strong>QR CID:</strong> {s.qrCid}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </li>
           ))}
         </ul>

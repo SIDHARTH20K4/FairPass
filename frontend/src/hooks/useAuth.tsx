@@ -62,25 +62,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function signIn(email: string, password: string): Promise<boolean> {
     try {
-      console.log('Frontend: Attempting signin with:', { email, password: password ? '[HIDDEN]' : 'undefined' });
-      
       const response = await fetch(`${API_BASE}/auth/signin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
 
-      console.log('Frontend: Response status:', response.status);
-
       if (response.ok) {
         const data = await response.json();
-        console.log('Frontend: Signin successful, organization:', data.organization);
         localStorage.setItem('auth-token', data.token);
         setOrganization(data.organization);
         return true;
       } else {
         const error = await response.json();
-        console.log('Frontend: Signin failed with error:', error);
         alert(error.error || 'Sign in failed');
         return false;
       }
