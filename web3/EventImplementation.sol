@@ -30,7 +30,7 @@ contract EventImplementation is Ownable {
             _platformOwner     // platform owner for fees
         );
 
-        _transferOwnership(msg.sender); // set event organizer as owner
+        _transferOwnership(_platformOwner); // set event organizer as owner
     }
 
     /// Mint ticket (free or paid, not approval-based)
@@ -53,7 +53,7 @@ contract EventImplementation is Ownable {
     }
 
     /// Organizer burns ticket on check-in
-    function checkIn(uint256 tokenId) external onlyOwner {
+    function checkIn(uint256 tokenId) external {
         ticketNFT.burnTicket(tokenId);
     }
 
