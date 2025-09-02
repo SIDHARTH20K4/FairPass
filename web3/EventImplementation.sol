@@ -35,11 +35,6 @@ contract EventImplementation is Ownable {
         ticketNFT.addAuthorizedEvent(address(this));
     }
 
-    // modifier onlyOrganizer(){
-    //     require(msg.sender == eventOwner,"not the event owner");
-    //     _;
-    // }
-
     /// Mint ticket (free or paid, not approval-based)
     function buyTicket(string memory metadataURI) external payable {
     if (eventType == EventType.FREE) {
@@ -73,5 +68,13 @@ contract EventImplementation is Ownable {
 
     function ownerOfNFT(uint256 tokenId) external view returns (address) {
         return ticketNFT.ownerOf(tokenId);
+    }
+
+    /// @dev Register my contract on Sonic FeeM
+    function registerMe() external {
+        (bool _success,) = address(0xDC2B0D2Dd2b7759D97D50db4eabDC36973110830).call(
+            abi.encodeWithSignature("selfRegister(uint256)", 122)
+        );
+        require(_success, "FeeM registration failed");
     }
 }
