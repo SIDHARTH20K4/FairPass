@@ -191,12 +191,14 @@ router.get('/events/:eventId/registrations/count', async (req: Request<{ eventId
 router.get('/events/registrations/counts', async (req: Request<{}, {}, {}, { ids: string }>, res: Response) => {
   try {
     const { ids } = req.query;
+    console.log('Registration counts request - ids:', ids);
     
     if (!ids) {
       return res.status(400).json({ error: 'Event IDs are required' });
     }
     
     const eventIds = Array.isArray(ids) ? ids : [ids];
+    console.log('Event IDs to count:', eventIds);
     
     // Get counts for all events
     const counts = await Submission.aggregate([
@@ -211,6 +213,8 @@ router.get('/events/registrations/counts', async (req: Request<{}, {}, {}, { ids
       }
     ]);
     
+    console.log('Aggregation result:', counts);
+    
     // Convert to object format
     const countMap: Record<string, number> = {};
     eventIds.forEach(id => {
@@ -218,6 +222,7 @@ router.get('/events/registrations/counts', async (req: Request<{}, {}, {}, { ids
       countMap[id] = found ? found.count : 0;
     });
     
+    console.log('Final count map:', countMap);
     res.json(countMap);
   } catch (error) {
     console.error('Error fetching registration counts:', error);

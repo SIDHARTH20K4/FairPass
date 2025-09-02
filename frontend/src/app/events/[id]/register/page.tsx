@@ -1,7 +1,7 @@
 "use client";
 
 import { useEvents } from "@/hooks/useEvents";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useAccount, useSignMessage } from "wagmi";
 import CustomDatePicker from "@/components/DatePicker";
@@ -11,9 +11,10 @@ import { Identity } from "@semaphore-protocol/identity";
 import QRTicket from "@/components/tickets/QRticket";
 import React from "react";
 
-const SUBMIT_KEY = (id: string) => `fairpass.events.submissions.${id}`;
+// Removed localStorage - using backend database only
 
 type Submission = {
+  id?: string; // Backend submission ID
   values: Record<string, string>;
   at: number;
   status: "pending" | "approved";
@@ -36,14 +37,43 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
   const [submitted, setSubmitted] = useState<Submission | null>(null);
   const [uploading, setUploading] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
+  const [loadingRegistration, setLoadingRegistration] = useState(true);
 
-  if (!event) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 py-12">
-        <p className="text-sm">Event not found.</p>
-      </main>
-    );
-  }
+  // Load existing registration from backend on mount
+  useEffect(() => {
+    async function loadExistingRegistration() {
+      if (!address) {
+        setLoadingRegistration(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(`http://localhost:4000/api/events/${id}/registrations/user/${address.toLowerCase()}`);
+        if (response.ok) {
+          const data = await response.json();
+          const existingSubmission: Submission = {
+            id: data.id,
+            values: data.values,
+            at: new Date(data.createdAt).getTime(),
+            status: data.status,
+            address: data.address,
+            qrCid: data.qrCid,
+            qrUrl: data.qrUrl,
+            jsonCid: data.jsonCid,
+            jsonUrl: data.jsonUrl,
+            signature: data.signature,
+          };
+          setSubmitted(existingSubmission);
+        }
+      } catch (error) {
+        console.log('No existing registration found');
+      } finally {
+        setLoadingRegistration(false);
+      }
+    }
+
+    loadExistingRegistration();
+  }, [address, id]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -53,20 +83,25 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
       return;
     }
 
-    const existing: Submission[] = JSON.parse(localStorage.getItem(SUBMIT_KEY(id)) || "[]");
-    const already = existing.find((s) => s.address === address.toLowerCase());
-    if (already) {
+    // Check if already registered by calling backend API
+    try {
+      const checkResponse = await fetch(`http://localhost:4000/api/events/${id}/registrations/user/${address.toLowerCase()}`);
+      if (checkResponse.ok) {
       alert("You have already registered with this wallet.");
       return;
+      }
+    } catch (error) {
+      // If check fails, continue with registration
+      console.log('Could not check existing registration, proceeding...');
     }
 
     setUploading(true);
     try {
-      const needsApproval = !!event.approvalNeeded;
+      const needsApproval = !!event?.approvalNeeded;
       const status: Submission["status"] = needsApproval ? "pending" : "approved";
       const payload = {
         eventId: id,
-        eventName: event.name,
+        eventName: event?.name,
         address: address.toLowerCase(),
         ...values,
         status,
@@ -87,7 +122,7 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
       let identityJson = localStorage.getItem(IDENTITY_KEY);
       let identity: Identity;
       if (identityJson) {
-        identity = Identity.fromString(identityJson);
+        identity = new Identity(identityJson);
       } else {
         identity = new Identity();
         localStorage.setItem(IDENTITY_KEY, identity.toString());
@@ -95,11 +130,20 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
       const commitment = identity.commitment.toString();
 
       // Send registration to backend with commitment included
-      await fetch(`/api/events/${id}/registrations`, {
+      const backendResponse = await fetch(`http://localhost:4000/api/events/${id}/registrations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ address: address.toLowerCase(), values, signature, commitment }),
       });
+      
+      if (!backendResponse.ok) {
+        const errorText = await backendResponse.text();
+        console.error('Backend registration error:', backendResponse.status, errorText);
+        throw new Error(`Failed to register with backend: ${backendResponse.status} - ${errorText}`);
+      }
+      
+      const backendData = await backendResponse.json();
+      console.log('Backend registration successful:', backendData);
 
       if (!needsApproval) {
         // For non-approval events, generate QR for { eventId, commitment }
@@ -112,20 +156,20 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
         jsonUrl = jsonUpload.url; jsonCid = jsonUpload.cid;
       }
 
+      // Use the data returned from backend instead of creating local entry
       const entry: Submission = {
-        values,
-        at: Date.now(),
-        status,
-        address: address.toLowerCase(),
-        qrCid,
-        qrUrl: qrImageUrl,
-        jsonCid,
-        jsonUrl,
-        signature,
+        id: backendData.id,
+        values: backendData.values,
+        at: new Date(backendData.createdAt).getTime(),
+        status: backendData.status,
+        address: backendData.address,
+        qrCid: backendData.qrCid,
+        qrUrl: backendData.qrUrl,
+        jsonCid: backendData.jsonCid,
+        jsonUrl: backendData.jsonUrl,
+        signature: backendData.signature,
       };
 
-      existing.push(entry);
-      localStorage.setItem(SUBMIT_KEY(id), JSON.stringify(existing));
       setSubmitted(entry);
     } catch (err: any) {
       alert(err?.message || "Registration failed");
@@ -135,12 +179,12 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
   }
 
   // Function to check approval status from backend
-  async function checkApprovalStatus() {
+  const checkApprovalStatus = useCallback(async () => {
     if (!address || !submitted) return;
     
     setCheckingStatus(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/events/${id}/registrations/user/${address.toLowerCase()}`);
+      const response = await fetch(`http://localhost:4000/api/events/${id}/registrations/user/${address.toLowerCase()}`);
       if (response.ok) {
         const data = await response.json();
         if (data.status === 'approved' && data.qrUrl) {
@@ -154,11 +198,6 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
             jsonCid: data.jsonCid
           };
           setSubmitted(updatedSubmission);
-          
-          // Update localStorage
-          const existing: Submission[] = JSON.parse(localStorage.getItem(SUBMIT_KEY(id)) || "[]");
-          const updated = existing.map(s => s.address === address.toLowerCase() ? updatedSubmission : s);
-          localStorage.setItem(SUBMIT_KEY(id), JSON.stringify(updated));
         }
       }
     } catch (error) {
@@ -166,7 +205,7 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
     } finally {
       setCheckingStatus(false);
     }
-  }
+  }, [address, submitted, id]);
 
   // Check approval status periodically for pending registrations
   useEffect(() => {
@@ -174,7 +213,30 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
       const interval = setInterval(checkApprovalStatus, 10000); // Check every 10 seconds
       return () => clearInterval(interval);
     }
-  }, [submitted?.status, address, id]);
+  }, [submitted?.status, address, checkApprovalStatus]);
+
+  // Early return after all hooks are called
+  if (!event) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-12">
+        <p className="text-sm">Event not found.</p>
+      </main>
+    );
+  }
+
+  if (loadingRegistration) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-12">
+        <div className="mb-6">
+          <Link href={`/events/${id}`} className="text-sm hover:underline">← Back to event</Link>
+        </div>
+        <div className="text-center py-8">
+          <div className="w-8 h-8 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-foreground/60">Loading registration status...</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-12">
@@ -225,8 +287,6 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
               participantName={submitted.values.name || 'Anonymous'}
               participantAddress={submitted.address || ''}
               approvalDate={new Date().toISOString()}
-              qrCid={submitted.qrCid}
-              jsonCid={submitted.jsonCid}
             />
           )}
 

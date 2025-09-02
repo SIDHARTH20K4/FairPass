@@ -33,14 +33,21 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
   useEffect(() => {
     async function load() {
       try {
+        console.log('Fetching registrations for event:', id);
         // Use backend API to get registrations
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/events/${id}/registrations`);
+        const res = await fetch(`http://localhost:4000/api/events/${id}/registrations`);
+        
+        console.log('Response status:', res.status);
+        console.log('Response headers:', res.headers);
         
         if (!res.ok) {
-          throw new Error(`Failed to fetch registrations: ${res.status}`);
+          const errorText = await res.text();
+          console.error('Error response:', errorText);
+          throw new Error(`Failed to fetch registrations: ${res.status} - ${errorText}`);
         }
         
         const data = await res.json();
+        console.log('Fetched registrations data:', data);
         
         // Map backend data to local type
         const mapped: Submission[] = (data || []).map((s: any) => ({
@@ -148,7 +155,7 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
       }
 
       // Update submission status in backend
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/events/${id}/registrations/${s.id}`, {
+      const response = await fetch(`http://localhost:4000/api/events/${id}/registrations/${s.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -194,7 +201,7 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
       }
       
       // Update submission status in backend
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/events/${id}/registrations/${s.id}`, {
+      const response = await fetch(`http://localhost:4000/api/events/${id}/registrations/${s.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'rejected' })

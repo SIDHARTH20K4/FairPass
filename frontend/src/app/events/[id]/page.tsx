@@ -11,15 +11,19 @@ import { useAccount } from "wagmi";
 import QRTicket from "@/components/tickets/QRticket";
 import Toast from "@/components/Toast";
 
-const SUBMIT_KEY = (id: string) => `fairpass.events.submissions.${id}`;
+// Removed localStorage - using backend database only
 
 type Submission = {
+  id?: string; // Backend submission ID
   values: Record<string, string>;
   at: number;
   status: "pending" | "approved";
   address?: string;
+  qrCid?: string;
   qrUrl?: string;
+  jsonCid?: string;
   jsonUrl?: string;
+  signature?: string;
 };
 
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -39,7 +43,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     
     setCheckingStatus(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/events/${id}/registrations/user/${address.toLowerCase()}`);
+      const response = await fetch(`http://localhost:4000/api/events/${id}/registrations/user/${address.toLowerCase()}`);
       if (response.ok) {
         const data = await response.json();
         
@@ -59,10 +63,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         setMySub(updatedSubmission);
         setMyStatus(data.status);
         
-        // Update localStorage
-        const subs: Submission[] = JSON.parse(localStorage.getItem(SUBMIT_KEY(id)) || "[]");
-        const updated = subs.map(s => s.address === address.toLowerCase() ? updatedSubmission : s);
-        localStorage.setItem(SUBMIT_KEY(id), JSON.stringify(updated));
+        // No localStorage needed - data is stored in backend
         
         setLastChecked(new Date());
         
@@ -88,13 +89,45 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     }
   }, [address, id, mySub]);
 
-  // Check status from localStorage on mount
+  // Load registration status from backend on mount
   useEffect(() => {
-    const subs: Submission[] = JSON.parse(localStorage.getItem(SUBMIT_KEY(id)) || "[]");
-    const mine = subs.filter((s) => s.address && s.address === address?.toLowerCase());
-    const last = mine[mine.length - 1];
-    setMyStatus(last?.status || null);
-    setMySub(last || null);
+    async function loadRegistrationStatus() {
+      if (!address) {
+        setMyStatus(null);
+        setMySub(null);
+        return;
+      }
+
+      try {
+        const response = await fetch(`http://localhost:4000/api/events/${id}/registrations/user/${address.toLowerCase()}`);
+        if (response.ok) {
+          const data = await response.json();
+          const submission: Submission = {
+            id: data.id,
+            values: data.values,
+            at: new Date(data.createdAt).getTime(),
+            status: data.status,
+            address: data.address,
+            qrCid: data.qrCid,
+            qrUrl: data.qrUrl,
+            jsonCid: data.jsonCid,
+            jsonUrl: data.jsonUrl,
+            signature: data.signature,
+          };
+          setMyStatus(data.status);
+          setMySub(submission);
+        } else {
+          setMyStatus(null);
+          setMySub(null);
+        }
+      } catch (error) {
+        console.log('No registration found');
+        setMyStatus(null);
+        setMySub(null);
+      }
+    }
+
+    loadRegistrationStatus();
   }, [id, address]);
 
   // Auto-check status every 15 seconds for pending registrations
@@ -340,8 +373,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                         participantName={mySub.values.name || 'Anonymous'}
                         participantAddress={mySub.address || ''}
                         approvalDate={new Date().toISOString()}
-                        qrCid={mySub.qrCid}
-                        jsonCid={mySub.jsonCid}
                       />
                       
                       {/* Last Updated Info */}

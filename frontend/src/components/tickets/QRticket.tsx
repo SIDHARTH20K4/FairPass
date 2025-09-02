@@ -8,8 +8,6 @@ interface QRTicketProps {
   participantName: string;
   participantAddress: string;
   approvalDate: string;
-  qrCid?: string;
-  jsonCid?: string;
 }
 
 export default function QRTicket({ 
@@ -17,9 +15,7 @@ export default function QRTicket({
   eventName, 
   participantName, 
   participantAddress, 
-  approvalDate, 
-  qrCid, 
-  jsonCid 
+  approvalDate
 }: QRTicketProps) {
   const downloadQR = () => {
     const link = document.createElement('a');
@@ -81,18 +77,7 @@ export default function QRTicket({
           </a>
         </div>
         
-        {/* IPFS Information */}
-        {(qrCid || jsonCid) && (
-          <div className="pt-3 border-t border-foreground/10 text-xs text-foreground/60">
-            <p className="mb-2">IPFS References:</p>
-            {qrCid && (
-              <p className="font-mono break-all">QR: {qrCid}</p>
-            )}
-            {jsonCid && (
-              <p className="font-mono break-all">Data: {jsonCid}</p>
-            )}
-          </div>
-        )}
+
       </div>
     </div>
   );

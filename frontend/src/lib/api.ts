@@ -1,14 +1,9 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
 export type ApiEvent = any;
 export type ApiSubmission = any;
 
 async function apiFetch(path: string, init?: RequestInit) {
-  if (!BASE_URL) {
-    console.error('API URL not configured. NEXT_PUBLIC_API_URL is:', process.env.NEXT_PUBLIC_API_URL);
-    throw new Error("API URL not configured. Please set NEXT_PUBLIC_API_URL environment variable.");
-  }
-  
   const fullUrl = `${BASE_URL}${path}`;
   console.log('Making API request to:', fullUrl);
   
