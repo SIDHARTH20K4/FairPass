@@ -88,9 +88,9 @@ export default function EventGroupPage() {
             <p className="text-sm text-foreground/50 mt-2">Members will appear here after they register and get approved.</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {members.map((member) => (
-              <div key={member.id} className="flex items-center justify-between p-3 border border-foreground/10 rounded-lg">
+                     <div className="space-y-3">
+             {members.map((member, index) => (
+               <div key={member.id || `member-${index}`} className="flex items-center justify-between p-3 border border-foreground/10 rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center">
                     <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

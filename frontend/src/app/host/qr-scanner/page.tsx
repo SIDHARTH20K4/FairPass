@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import QRScanner from "@/components/QRScanner";
 import { ZKProofService } from "@/Services/ZKProofService";
+import MobileSidebar from "@/components/MobileSidebar";
 
 type QRData = {
   eventId: string;
@@ -30,6 +31,7 @@ type ValidationResult = {
 export default function QRScannerPage() {
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [isValidating, setIsValidating] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleQRScan = async (qrDataString: string) => {
     setIsValidating(true);
@@ -159,10 +161,42 @@ export default function QRScannerPage() {
     setValidationResult(null);
   };
 
+  const handleLogout = () => {
+    // Add logout functionality here
+    window.location.href = '/host/signin';
+  };
+
+  const handleRefresh = () => {
+    // Add refresh functionality here
+    window.location.reload();
+  };
+
   return (
-    <main className="mx-auto max-w-4xl px-4 py-12">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
+    <div className="min-h-screen bg-background">
+      {/* Mobile Header */}
+      <div className="lg:hidden bg-background border-b border-border px-3 py-2 fixed top-0 left-0 right-0 z-40">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-1.5 hover:bg-foreground/10 rounded-lg transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <h1 className="text-xs font-medium">QR Scanner</h1>
+          <Link href="/host/dashboard" className="text-xs hover:underline flex items-center gap-1 text-foreground/70">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back
+          </Link>
+        </div>
+      </div>
+
+      {/* Desktop Header */}
+      <div className="hidden lg:block mx-auto max-w-6xl px-4 py-6">
+        <div className="mb-6">
           <Link href="/host/dashboard" className="text-sm hover:underline mb-2 block">
             ← Back to Dashboard
           </Link>
@@ -171,20 +205,30 @@ export default function QRScannerPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Scanner Section */}
-        <div className="card p-6">
-          <h2 className="text-xl font-semibold mb-4 text-foreground">Scan QR Code</h2>
-          <QRScanner 
-            onScan={handleQRScan}
-            onError={handleError}
-            className="w-full"
-          />
-        </div>
+      {/* Mobile Sidebar */}
+      <MobileSidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        onLogout={handleLogout}
+        onRefresh={handleRefresh}
+        loading={false}
+      />
 
-        {/* Validation Results Section */}
-        <div className="card p-6">
-          <h2 className="text-xl font-semibold mb-4 text-foreground">Validation Results</h2>
+      <div className="mx-auto max-w-6xl px-3 pb-6 pt-12 lg:pt-0 lg:px-4 lg:pb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-8">
+          {/* Scanner Section */}
+          <div className="card p-2.5 lg:p-6">
+            <h2 className="text-xs lg:text-lg font-medium mb-2 text-foreground">Scan QR Code</h2>
+            <QRScanner 
+              onScan={handleQRScan}
+              onError={handleError}
+              className="w-full"
+            />
+          </div>
+
+          {/* Validation Results Section */}
+          <div className="card p-2.5 lg:p-6">
+            <h2 className="text-xs lg:text-lg font-medium mb-2 text-foreground">Validation Results</h2>
           
           {isValidating && (
             <div className="text-center py-8">
@@ -261,7 +305,7 @@ export default function QRScannerPage() {
               )}
 
               {/* Action Buttons */}
-              <div className="flex gap-3 pt-4">
+              <div className="flex flex-col sm:flex-row gap-3 pt-4">
                 <button
                   onClick={resetValidation}
                   className="btn-primary flex-1"
@@ -282,42 +326,11 @@ export default function QRScannerPage() {
               </div>
             </div>
           )}
+          </div>
         </div>
-      </div>
 
-      {/* Instructions */}
-      <div className="mt-8 card p-6">
-        <h3 className="font-semibold text-foreground mb-3">How to Use</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-foreground/70">
-          <div className="flex items-start gap-3">
-            <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="text-xs font-semibold text-primary">1</span>
-            </div>
-            <div>
-              <div className="font-medium">Start Scanning</div>
-              <div>Click "Start Scanning" and allow camera access</div>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="text-xs font-semibold text-primary">2</span>
-            </div>
-            <div>
-              <div className="font-medium">Point at QR Code</div>
-              <div>Position the QR code within the scanning area</div>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="text-xs font-semibold text-primary">3</span>
-            </div>
-            <div>
-              <div className="font-medium">View Results</div>
-              <div>Check validation results and ticket details</div>
-            </div>
-          </div>
-        </div>
+
       </div>
-    </main>
+    </div>
   );
 }

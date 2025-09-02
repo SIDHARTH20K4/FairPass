@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { apiGetOrganizationEvents, apiUpdateEventStatus, apiGetEventsRegistrationCounts } from "@/lib/api";
+import MobileSidebar from "@/components/MobileSidebar";
 
 type HostEvent = {
   id: string;
@@ -29,6 +30,7 @@ export default function HostDashboardPage() {
   const [orgDescription, setOrgDescription] = useState("");
   const [participantCounts, setParticipantCounts] = useState<Record<string, number>>({});
   const [loadingCounts, setLoadingCounts] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (!authLoading && isAuthenticated && organization) {
@@ -147,13 +149,31 @@ export default function HostDashboardPage() {
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-12">
-      <div className="mb-8 flex items-center justify-between">
+    <main className="mx-auto max-w-3xl px-4 py-4 lg:py-12">
+      {/* Mobile Header */}
+      <div className="lg:hidden mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Organizer Dashboard</h1>
-          <p className="text-foreground/60">Manage your events and organization</p>
+          <h1 className="text-lg font-semibold text-foreground">Dashboard</h1>
+          <p className="text-xs text-foreground/60">Manage your events</p>
         </div>
-        <div className="flex items-center gap-3">
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="p-2 hover:bg-foreground/10 rounded-lg transition-colors"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Desktop Header */}
+      <div className="hidden lg:block mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">Organizer Dashboard</h1>
+            <p className="text-foreground/60">Manage your events and organization</p>
+          </div>
+          <div className="flex items-center gap-3">
           <button 
             onClick={loadEvents} 
             disabled={loading}
@@ -192,8 +212,18 @@ export default function HostDashboardPage() {
             </svg>
             <span>Logout</span>
           </button>
+          </div>
         </div>
       </div>
+
+      {/* Mobile Sidebar */}
+      <MobileSidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        onLogout={handleLogout}
+        onRefresh={loadEvents}
+        loading={loading}
+      />
 
       {/* Organization Information Section */}
       <div className="mb-8 card p-6 fade-in">
