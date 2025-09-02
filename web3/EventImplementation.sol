@@ -8,6 +8,7 @@ contract EventImplementation is Ownable {
     string public eventName;
     enum EventType { FREE, PAID, APPROVAL }
     EventType public eventType;
+    //address public eventOwner;
 
     uint256 public ticketPrice;
     EventTicket public ticketNFT;
@@ -16,22 +17,28 @@ contract EventImplementation is Ownable {
         string memory _name,
         EventType _eventType,
         uint256 _ticketPrice,
+        address _eventOwner,
         address _platformOwner
-    ) Ownable(msg.sender){
+    ) Ownable(_eventOwner){
         eventName = _name;
         eventType = _eventType;
         ticketPrice = _ticketPrice;
+        //eventOwner = _eventOwner;
 
         // Deploy fresh ticket NFT for this event
         ticketNFT = new EventTicket(
             string(abi.encodePacked(_name, " Ticket")),
             "EVT",
-            msg.sender,        // event owner
+            address(this),        // event owner
             _platformOwner     // platform owner for fees
         );
-
-        _transferOwnership(_platformOwner); // set event organizer as owner
+        ticketNFT.addAuthorizedEvent(address(this));
     }
+
+    // modifier onlyOrganizer(){
+    //     require(msg.sender == eventOwner,"not the event owner");
+    //     _;
+    // }
 
     /// Mint ticket (free or paid, not approval-based)
     function buyTicket(string memory metadataURI) external payable {
@@ -53,7 +60,14 @@ contract EventImplementation is Ownable {
     }
 
     /// Organizer burns ticket on check-in
-    function checkIn(uint256 tokenId) external {
+    function checkIn(uint256 tokenId) external{
+        address ticketOwner = ticketNFT.ownerOf(tokenId);
+        require(
+            msg.sender == owner() || 
+            msg.sender == ticketOwner,
+            "Only organizer or ticket owner can check in"
+        );
+
         ticketNFT.burnTicket(tokenId);
     }
 
