@@ -17,6 +17,7 @@ contract EventTicket is ERC721Burnable, ERC721URIStorage, Ownable, ReentrancyGua
     mapping(uint256 => uint8) public resaleCount;
     mapping(uint256 => uint256) public resalePrices;
     mapping(uint256 => bool) public listedForResale;
+    mapping(address => bool) public authorizedEvents;
 
     // Events
     event TicketMinted(uint256 indexed tokenId, address indexed to, string metadataURI);
@@ -25,6 +26,8 @@ contract EventTicket is ERC721Burnable, ERC721URIStorage, Ownable, ReentrancyGua
     event TicketResold(uint256 indexed tokenId, address from, address to, uint256 price, uint256 fee);
     event TicketBurned(uint256 indexed tokenId, address indexed burner);
     event ResaleFeeUpdated(uint256 newFeeBps);
+    event EventAuthorized(address indexed eventContract);
+    event EventDeauthorized(address indexed eventContract);
 
     constructor(
         string memory name, 
@@ -34,6 +37,17 @@ contract EventTicket is ERC721Burnable, ERC721URIStorage, Ownable, ReentrancyGua
     ) ERC721(name, symbol) Ownable(_eventOwner) {
         require(_platformOwner != address(0), "Invalid platform owner");
         platformOwner = _platformOwner;
+    }
+
+    function addAuthorizedEvent(address eventContract) external onlyOwner {
+        require(eventContract != address(0), "Invalid event contract");
+        authorizedEvents[eventContract] = true;
+        emit EventAuthorized(eventContract);
+    }
+
+    function removeAuthorizedEvent(address eventContract) external onlyOwner {
+        authorizedEvents[eventContract] = false;
+        emit EventDeauthorized(eventContract);
     }
 
     function OwnerMint(address to, string memory metadataURI) external onlyOwner whenNotPaused returns (uint256) {
@@ -109,7 +123,7 @@ contract EventTicket is ERC721Burnable, ERC721URIStorage, Ownable, ReentrancyGua
 
     function burnTicket(uint256 tokenId) external whenNotPaused {
         require(
-            ownerOf(tokenId) == msg.sender || msg.sender == owner(),
+            ownerOf(tokenId) == msg.sender || msg.sender == owner() || authorizedEvents[msg.sender],
             "Not authorized to burn"
         );
         
