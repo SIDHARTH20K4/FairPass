@@ -9,6 +9,9 @@ import LocationMap from "@/components/LocationMap";
 import { uploadImageToIPFS } from "@/lib/ipfs";
 import { useAuth } from "@/hooks/useAuth";
 import { apiCreateEvent } from "@/lib/api";
+import { useEventFactory } from "@/hooks/useWeb3";
+import { EventType, web3Service } from "@/services/Web3Service";
+import { WEB3_CONFIG } from "@/config/web3";
 
 const LOCATIONS = [
   "Singapore","Mumbai","Bengaluru","Delhi","Jakarta","Seoul","Tokyo","Sydney","Taipei","Dubai","London","Paris","Berlin","Lisbon","Amsterdam","San Francisco","New York","Toronto","Austin","Buenos Aires","São Paulo","Cape Town","Nairobi","Worldwide",
@@ -26,6 +29,9 @@ const CURRENCIES = [
 export default function CreateEventPage() {
   const router = useRouter();
   const { organization, isAuthenticated, loading: authLoading } = useAuth();
+  
+  // Web3 integration
+  const { isInitialized, isConnected, address, createEvent, error: web3Error } = useEventFactory();
 
   const [name, setName] = useState("");
   const [bannerDataUrl, setBannerDataUrl] = useState("");
@@ -43,6 +49,8 @@ export default function CreateEventPage() {
   const [lng, setLng] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  const [useBlockchain, setUseBlockchain] = useState(true);
+  const [blockchainEventAddress, setBlockchainEventAddress] = useState<string | null>(null);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -74,8 +82,52 @@ export default function CreateEventPage() {
       alert("Please sign in to create events");
       return;
     }
+
+    if (useBlockchain && !isConnected) {
+      alert("Please connect your wallet to create blockchain events");
+      return;
+    }
+
     try {
       setSubmitting(true);
+      
+      // Upload banner image to IPFS
+      const { cid, url } = await uploadImageToIPFS(bannerDataUrl);
+      
+      let blockchainEventAddress: string | null = null;
+      
+      // Create blockchain event if enabled
+      if (useBlockchain && isConnected && isInitialized) {
+        try {
+          // Determine event type
+          let eventType: EventType;
+          if (approvalNeeded) {
+            eventType = EventType.APPROVAL;
+          } else if (isPaid && price) {
+            eventType = EventType.PAID;
+          } else {
+            eventType = EventType.FREE;
+          }
+
+          // Convert price to wei if paid event
+          const ticketPrice = isPaid && price ? web3Service.parseEther(price) : "0";
+
+          // Create event on blockchain
+          blockchainEventAddress = await createEvent({
+            name,
+            eventType,
+            ticketPrice
+          });
+
+          setBlockchainEventAddress(blockchainEventAddress);
+        } catch (blockchainError) {
+          console.error('Blockchain event creation failed:', blockchainError);
+          alert(`Blockchain event creation failed: ${(blockchainError as Error).message}`);
+          return;
+        }
+      }
+
+      // Create event in backend database
       const payload = {
         name,
         isPaid,
@@ -92,11 +144,20 @@ export default function CreateEventPage() {
         lng: lng ? Number(lng) : undefined,
         hostAddress: organization.address,
         status: 'draft' as const,
+        blockchainEventAddress, // Include blockchain address if created
+        useBlockchain
       };
       
-      const { cid, url } = await uploadImageToIPFS(bannerDataUrl);
       const eventData = { ...payload, bannerUrl: url, bannerCid: cid };
       const createdEvent = await apiCreateEvent(eventData);
+      
+      // Show success message
+      if (blockchainEventAddress) {
+        alert(`Event created successfully!\nBlockchain Address: ${blockchainEventAddress}`);
+      } else {
+        alert('Event created successfully!');
+      }
+      
       router.replace('/host/dashboard');
     } catch (e: any) {
       alert(e?.message || 'Failed to create event');
@@ -428,6 +489,60 @@ export default function CreateEventPage() {
                           </select>
                         </div>
                       </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Blockchain Section */}
+                <div className="space-y-4">
+                  <h3 className="text-xl font-medium text-foreground">Blockchain Integration</h3>
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <input 
+                      type="checkbox" 
+                      checked={useBlockchain} 
+                      onChange={(e) => setUseBlockchain(e.target.checked)} 
+                      className="w-4 h-4 text-foreground"
+                    />
+                    <span className="text-lg group-hover:text-foreground/80 transition-colors">
+                      Create blockchain event (NFT tickets)
+                    </span>
+                  </label>
+                  <p className="text-foreground/60 text-sm">
+                    Enable to create NFT tickets on the blockchain with resale marketplace features.
+                  </p>
+                  
+                  {useBlockchain && (
+                    <div className="glass p-4 rounded-lg space-y-3">
+                      {!isConnected ? (
+                        <div className="text-center py-4">
+                          <p className="text-foreground/60 mb-3">Connect your wallet to create blockchain events</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // This will be handled by the wallet connection in the header
+                              alert('Please connect your wallet using the wallet button in the header');
+                            }}
+                            className="btn-primary"
+                          >
+                            Connect Wallet
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-sm">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span className="text-foreground/80">Wallet Connected</span>
+                          </div>
+                          <p className="text-xs text-foreground/60 font-mono">
+                            {address}
+                          </p>
+                          {web3Error && (
+                            <p className="text-xs text-red-500">
+                              {web3Error}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

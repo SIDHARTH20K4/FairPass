@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
+import { BrowserMultiFormatReader } from '@zxing/browser';
 
 interface QRScannerProps {
   onScan: (data: string) => void;
@@ -10,96 +11,49 @@ interface QRScannerProps {
 
 export default function QRScanner({ onScan, onError, className = "" }: QRScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Simple QR code detection using pattern matching
-  const detectQRCode = (imageData: ImageData): string | null => {
-    // This is a simplified QR detection - in a real app you'd use a proper QR library
-    // For now, we'll look for common QR code patterns
-    const data = imageData.data;
-    const width = imageData.width;
-    const height = imageData.height;
-    
-    // Look for the characteristic finder patterns of QR codes
-    // This is a very basic implementation - real QR detection is much more complex
-    for (let y = 0; y < height - 7; y++) {
-      for (let x = 0; x < width - 7; x++) {
-        // Check for 7x7 finder pattern (simplified)
-        if (isFinderPattern(data, width, x, y)) {
-          // If we find a pattern, try to extract data (simplified)
-          const qrData = extractQRData(imageData, x, y);
-          if (qrData) {
-            return qrData;
-          }
-        }
-      }
-    }
-    return null;
-  };
-
-  const isFinderPattern = (data: Uint8ClampedArray, width: number, x: number, y: number): boolean => {
-    // Simplified finder pattern detection
-    // Real QR detection would be much more sophisticated
-    const pattern = [
-      [1,1,1,1,1,1,1],
-      [1,0,0,0,0,0,1],
-      [1,0,1,1,1,0,1],
-      [1,0,1,1,1,0,1],
-      [1,0,1,1,1,0,1],
-      [1,0,0,0,0,0,1],
-      [1,1,1,1,1,1,1]
-    ];
-    
-    for (let py = 0; py < 7; py++) {
-      for (let px = 0; px < 7; px++) {
-        const pixelIndex = ((y + py) * width + (x + px)) * 4;
-        const brightness = (data[pixelIndex] + data[pixelIndex + 1] + data[pixelIndex + 2]) / 3;
-        const isBlack = brightness < 128;
-        
-        if ((pattern[py][px] === 1 && !isBlack) || (pattern[py][px] === 0 && isBlack)) {
-          return false;
-        }
-      }
-    }
-    return true;
-  };
-
-  const extractQRData = (imageData: ImageData, x: number, y: number): string | null => {
-    // This is a placeholder - real QR data extraction is complex
-    // For demo purposes, we'll return a mock QR data
-    return JSON.stringify({
-      eventId: "demo-event-123",
-      eventName: "Demo Event",
-      participantAddress: "0x1234567890123456789012345678901234567890",
-      participantName: "Demo Participant",
-      approvalDate: new Date().toISOString(),
-      type: "event-ticket"
-    });
-  };
 
   const startScanning = async () => {
     try {
       setError(null);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: 'environment', // Use back camera if available
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
-      });
       
-      streamRef.current = stream;
+      // Initialize the ZXing reader
+      if (!readerRef.current) {
+        readerRef.current = new BrowserMultiFormatReader();
+      }
+      
+      // Get available video devices
+      const videoInputDevices = await BrowserMultiFormatReader.listVideoInputDevices();
+      
+      // Prefer back camera if available
+      const backCamera = videoInputDevices.find(device => 
+        device.label.toLowerCase().includes('back') || 
+        device.label.toLowerCase().includes('rear')
+      );
+      
+      const deviceId = backCamera?.deviceId || videoInputDevices[0]?.deviceId;
       
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        setIsScanning(true);
+        // Start decoding from the video element
+        await readerRef.current.decodeFromVideoDevice(
+          deviceId,
+          videoRef.current,
+          (result, error) => {
+            if (result) {
+              onScan(result.getText());
+              stopScanning();
+            }
+            if (error && !(error instanceof Error && error.name === 'NotFoundException')) {
+              // NotFoundException is normal when no QR code is detected
+              console.warn('QR scan error:', error);
+            }
+          }
+        );
         
-        // Start scanning loop
-        scanLoop();
+        setIsScanning(true);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to access camera';
@@ -109,42 +63,14 @@ export default function QRScanner({ onScan, onError, className = "" }: QRScanner
   };
 
   const stopScanning = () => {
+    if (readerRef.current) {
+      readerRef.current.reset();
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
     setIsScanning(false);
-  };
-
-  const scanLoop = () => {
-    if (!isScanning || !videoRef.current || !canvasRef.current) return;
-    
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    
-    if (!ctx) return;
-    
-    // Set canvas size to match video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    // Draw video frame to canvas
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    // Get image data
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    
-    // Try to detect QR code
-    const qrData = detectQRCode(imageData);
-    if (qrData) {
-      onScan(qrData);
-      stopScanning();
-      return;
-    }
-    
-    // Continue scanning
-    requestAnimationFrame(scanLoop);
   };
 
   useEffect(() => {
@@ -162,10 +88,7 @@ export default function QRScanner({ onScan, onError, className = "" }: QRScanner
           playsInline
           muted
         />
-        <canvas
-          ref={canvasRef}
-          className="hidden"
-        />
+
         
         {/* Scanning overlay */}
         {isScanning && (
