@@ -140,7 +140,7 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
     
     setCheckingStatus(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/registrations/events/${id}/registrations/user/${address.toLowerCase()}`);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/events/${id}/registrations/user/${address.toLowerCase()}`);
       if (response.ok) {
         const data = await response.json();
         if (data.status === 'approved' && data.qrUrl) {

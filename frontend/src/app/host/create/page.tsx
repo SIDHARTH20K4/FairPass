@@ -231,25 +231,25 @@ export default function CreateEventPage() {
                   <label className="block text-lg font-medium text-foreground" htmlFor="org">
                     Host Organization
                   </label>
-                  <input 
-                    id="org" 
-                    type="text" 
-                    value={organizationName} 
-                    onChange={(e) => setOrganizationName(e.target.value)} 
+          <input 
+            id="org" 
+            type="text" 
+            value={organizationName} 
+            onChange={(e) => setOrganizationName(e.target.value)} 
                     className="input" 
                     placeholder="Your organization name"
-                  />
-                </div>
+          />
+        </div>
 
                 <div className="space-y-3">
                   <label className="block text-lg font-medium text-foreground" htmlFor="orgdesc">
                     Organization Description
                   </label>
-                  <textarea 
-                    id="orgdesc" 
-                    value={organizationDescription} 
-                    onChange={(e) => setOrganizationDescription(e.target.value)} 
-                    rows={3} 
+          <textarea 
+            id="orgdesc" 
+            value={organizationDescription} 
+            onChange={(e) => setOrganizationDescription(e.target.value)} 
+            rows={3} 
                     className="input resize-none"
                     placeholder="Tell people about your organization"
                   />
@@ -265,8 +265,8 @@ export default function CreateEventPage() {
                     rows={8} 
                     className="input resize-none"
                     placeholder="Describe your event in detail..."
-                  />
-                </div>
+          />
+        </div>
               </div>
 
               <div className="flex justify-between mt-8">
@@ -291,7 +291,7 @@ export default function CreateEventPage() {
                   </svg>
                 </button>
               </div>
-            </div>
+        </div>
           )}
 
           {/* Step 3: Location & Time */}
@@ -313,27 +313,27 @@ export default function CreateEventPage() {
                     {LOCATIONS.map((loc) => (
                       <option key={loc} value={loc}>{loc}</option>
                     ))}
-                  </select>
-                </div>
+          </select>
+        </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-3">
-                    <SimpleDatePicker value={date} onChange={setDate} label="Event Date" required />
-                  </div>
+            <SimpleDatePicker value={date} onChange={setDate} label="Event Date" required />
+          </div>
                   <div className="space-y-3">
-                    <SimpleTimePicker value={time} onChange={setTime} label="Event Time" required />
-                  </div>
-                </div>
+            <SimpleTimePicker value={time} onChange={setTime} label="Event Time" required />
+          </div>
+        </div>
 
                 <div className="space-y-3">
                   <label className="block text-lg font-medium text-foreground">
                     Precise Location (Optional)
                   </label>
-                  <LocationMap 
-                    lat={lat ? Number(lat) : undefined}
-                    lng={lng ? Number(lng) : undefined}
-                    onLocationChange={(lat, lng) => { setLat(lat.toString()); setLng(lng.toString()); }}
-                  />
+        <LocationMap 
+          lat={lat ? Number(lat) : undefined}
+          lng={lng ? Number(lng) : undefined}
+          onLocationChange={(lat, lng) => { setLat(lat.toString()); setLng(lng.toString()); }}
+        />
                 </div>
               </div>
 
@@ -359,7 +359,7 @@ export default function CreateEventPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
                 </button>
-              </div>
+          </div>
             </div>
           )}
 
@@ -414,8 +414,8 @@ export default function CreateEventPage() {
                               className="input pl-8" 
                             />
                           </div>
-                        </div>
-                        <div className="space-y-2">
+        </div>
+        <div className="space-y-2">
                           <label className="block text-sm font-medium text-foreground/80">Currency</label>
                           <select 
                             value={currency} 
@@ -482,10 +482,10 @@ export default function CreateEventPage() {
                     </>
                   )}
                 </button>
-              </div>
-            </div>
+        </div>
+        </div>
           )}
-        </form>
+      </form>
       </div>
     </main>
   );

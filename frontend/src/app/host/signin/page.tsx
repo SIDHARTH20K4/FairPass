@@ -150,46 +150,46 @@ export default function HostSigninPage() {
               </div>
               
               <form onSubmit={handleEmailSubmit} className="space-y-4">
-                <div className="space-y-2">
+        <div className="space-y-2">
                   <label className="block text-sm font-medium text-foreground" htmlFor="email">
                     Email Address
                   </label>
-                  <input 
-                    id="email" 
-                    type="email" 
-                    value={email} 
-                    onChange={(e) => setEmail(e.target.value)} 
+          <input 
+            id="email" 
+            type="email" 
+            value={email} 
+            onChange={(e) => setEmail(e.target.value)} 
                     className="input" 
                     placeholder="your@email.com"
-                    required 
-                  />
-                </div>
+            required 
+          />
+        </div>
                 
-                <div className="space-y-2">
+        <div className="space-y-2">
                   <label className="block text-sm font-medium text-foreground" htmlFor="password">
                     Password
                   </label>
-                  <input 
-                    id="password" 
-                    type="password" 
-                    value={password} 
-                    onChange={(e) => setPassword(e.target.value)} 
+          <input 
+            id="password" 
+            type="password" 
+            value={password} 
+            onChange={(e) => setPassword(e.target.value)} 
                     className="input" 
                     placeholder="Enter your password"
-                    required 
-                  />
-                </div>
+            required 
+          />
+        </div>
                 
                 <div className="pt-2">
-                  <button 
-                    type="submit" 
-                    disabled={submitting} 
+          <button 
+            type="submit" 
+            disabled={submitting} 
                     className="btn-primary w-full py-3"
-                  >
-                    {submitting ? "Signing in..." : "Sign in"}
-                  </button>
-                </div>
-              </form>
+          >
+            {submitting ? "Signing in..." : "Sign in"}
+          </button>
+        </div>
+      </form>
               
               <div className="text-center text-sm text-foreground/60">
                 <p>Don't have an account?</p>

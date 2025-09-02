@@ -34,7 +34,7 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
     async function load() {
       try {
         // Use backend API to get registrations
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/registrations/events/${id}/registrations`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/events/${id}/registrations`);
         
         if (!res.ok) {
           throw new Error(`Failed to fetch registrations: ${res.status}`);
@@ -109,7 +109,7 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
       <main className="mx-auto max-w-3xl px-4 py-12">
         <div className="mb-6"><Link href={`/events/${id}`} className="text-sm hover:underline">← Back to event</Link></div>
         <div className="space-y-4">
-          <p className="text-sm">Not authorized. Connect as the host wallet to review registrations.</p>
+        <p className="text-sm">Not authorized. Connect as the host wallet to review registrations.</p>
           
           
         </div>
@@ -148,7 +148,7 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
       }
 
       // Update submission status in backend
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/registrations/events/${id}/registrations/${s.id}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/events/${id}/registrations/${s.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -175,7 +175,7 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
         jsonUrl: jsonUpload.url, 
         jsonCid: jsonUpload.cid 
       } : item);
-      setSubs(next);
+    setSubs(next);
       
     } catch (error) {
       console.error('Failed to approve registration:', error);
@@ -194,7 +194,7 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
       }
       
       // Update submission status in backend
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/registrations/events/${id}/registrations/${s.id}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/events/${id}/registrations/${s.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'rejected' })
@@ -207,8 +207,8 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
       }
       
       // Update local state
-      const next = subs.map((item, i) => i === index ? { ...item, status: "rejected" } : item);
-      setSubs(next);
+    const next = subs.map((item, i) => i === index ? { ...item, status: "rejected" } : item);
+    setSubs(next);
       
     } catch (error) {
       console.error('Failed to reject registration:', error);
@@ -244,38 +244,38 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 space-y-2">
                   <div className="text-sm space-y-1">
-                    {Object.entries(s.values).map(([k, v]) => (
-                      <div key={k}><span className="font-medium">{k}:</span> {v}</div>
-                    ))}
+                {Object.entries(s.values).map(([k, v]) => (
+                  <div key={k}><span className="font-medium">{k}:</span> {v}</div>
+                ))}
                   </div>
                                   <div className="text-xs text-foreground/60 space-y-1">
                   <div>Registered: {new Date(s.at).toLocaleString()}</div>
                   <div>Wallet: {s.address}</div>
                 </div>
-                </div>
+              </div>
                 
                 {/* Status and Actions */}
-                <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
                   <span className={`text-xs rounded px-2 py-1 border ${statusClasses(s.status)}`}>
                     {s.status}
                   </span>
-                  {s.status !== "approved" && (
+                {s.status !== "approved" && (
                     <button 
                       onClick={() => approve(idx)} 
                       className="btn-primary text-xs px-3 py-1"
                     >
                       Approve
                     </button>
-                  )}
-                  {s.status !== "rejected" && (
+                )}
+                {s.status !== "rejected" && (
                     <button 
                       onClick={() => reject(idx)} 
                       className="btn-secondary text-xs px-3 py-1"
                     >
                       Reject
                     </button>
-                  )}
-                </div>
+                )}
+              </div>
               </div>
               
               {/* QR Code Display for Approved Participants */}

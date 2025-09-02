@@ -39,7 +39,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     
     setCheckingStatus(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/registrations/events/${id}/registrations/user/${address.toLowerCase()}`);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/events/${id}/registrations/user/${address.toLowerCase()}`);
       if (response.ok) {
         const data = await response.json();
         
