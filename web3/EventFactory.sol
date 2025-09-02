@@ -14,11 +14,12 @@ contract EventFactory {
     }
 
     function createEvent(string memory name, EventImplementation.EventType EventType, uint256 ticketPrice) external {
-    
+
     EventImplementation newEvent = new EventImplementation(
         name,
         EventType,
         ticketPrice,
+        msg.sender, 
         platformOwner
     );
     events.push(newEvent);
