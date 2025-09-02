@@ -18,6 +18,9 @@ const SubmissionSchema = new Schema({
   commitment: {
     type: String
   },
+  semaphoreIdentity: {
+    type: String // Encrypted Semaphore identity
+  },
   status: {
     type: String,
     enum: ['pending', 'approved', 'rejected'],

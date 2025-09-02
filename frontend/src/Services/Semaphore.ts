@@ -13,7 +13,7 @@ export interface UserQRData {
  * @returns UserQRData
  */
 
-export function createUserQR(eventId: Number): UserQRData {
+export function createUserQR(eventId: string): UserQRData {
     const user = new Identity();
 
     // Generate public commitment (can be safely shared)
@@ -29,10 +29,10 @@ export function createUserQR(eventId: Number): UserQRData {
         console.log("\n🎫 QR Code (scan for check-in):\n", url);
     });
 
-    // Save QR code as PNG file (optional)
-    QRCode.toFile("./userQR.png", qrData, { width: 300 }, (err) => {
+    // Generate QR code as data URL for frontend usage
+    QRCode.toDataURL(qrData, { width: 300 }, (err, dataUrl) => {
         if (err) console.error(err);
-        else console.log("✅ QR saved as userQR.png");
+        else console.log("✅ QR code generated as data URL");
     });
 
     // Return user, commitment, and qrData for frontend usage

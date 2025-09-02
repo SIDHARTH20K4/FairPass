@@ -1,10 +1,12 @@
 import express, { Request, Response } from 'express';
 import Submission from '../models/Submission';
 import Event from '../models/Event';
+import { SemaphoreService } from '../services/SemaphoreService';
 import { 
   CreateSubmissionRequest, 
   UpdateSubmissionRequest, 
-  SubmissionResponse 
+  SubmissionResponse,
+  CheckInRequest
 } from '../types';
 
 const router = express.Router();
@@ -114,6 +116,14 @@ router.patch('/events/:eventId/registrations/:submissionId', async (
       if (qrUrl) updateData.qrUrl = qrUrl;
       if (jsonCid) updateData.jsonCid = jsonCid;
       if (jsonUrl) updateData.jsonUrl = jsonUrl;
+      
+      // Get the submission to access the commitment
+      const currentSubmission = await Submission.findById(submissionId);
+      if (currentSubmission?.commitment) {
+        console.log(`Adding commitment ${currentSubmission.commitment} to event group for event ${eventId}`);
+        // The commitment is automatically included in the event group when we call createEventGroup
+        // This happens in the SemaphoreService.createEventGroup method
+      }
     }
     
     const submission = await Submission.findByIdAndUpdate(
@@ -227,6 +237,110 @@ router.get('/events/registrations/counts', async (req: Request<{}, {}, {}, { ids
   } catch (error) {
     console.error('Error fetching registration counts:', error);
     res.status(500).json({ error: 'Failed to fetch registration counts' });
+  }
+});
+
+// Check-in endpoint using ZK proofs
+router.post('/events/:eventId/checkin', async (
+  req: Request<{ eventId: string }, {}, CheckInRequest>, 
+  res: Response
+) => {
+  try {
+    const { eventId } = req.params;
+    const { proof, commitment } = req.body;
+    
+    // Verify event exists
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    
+    // Verify the ZK proof
+    const verification = await SemaphoreService.verifyCheckInProof(eventId, proof, commitment);
+    
+    if (!verification.valid) {
+      return res.status(400).json({ 
+        error: 'Invalid check-in proof', 
+        details: verification.error 
+      });
+    }
+    
+    // Check if already checked in (using nullifier hash)
+    // In a real implementation, you'd store nullifier hashes to prevent double check-in
+    const nullifierKey = `checkin:${eventId}:${proof.nullifierHash}`;
+    // TODO: Implement nullifier storage to prevent double check-in
+    
+    res.json({ 
+      success: true, 
+      message: 'Check-in successful',
+      nullifierHash: proof.nullifierHash
+    });
+  } catch (error) {
+    console.error('Error processing check-in:', error);
+    res.status(500).json({ error: 'Check-in failed' });
+  }
+});
+
+// Get event group information for ZK proof generation
+router.get('/events/:eventId/group', async (
+  req: Request<{ eventId: string }>, 
+  res: Response
+) => {
+  try {
+    const { eventId } = req.params;
+    
+    // Verify event exists
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    
+    // Get the event group
+    const eventGroup = await SemaphoreService.createEventGroup(eventId);
+    
+    res.json(eventGroup);
+  } catch (error) {
+    console.error('Error fetching event group:', error);
+    res.status(500).json({ error: 'Failed to fetch event group' });
+  }
+});
+
+// Get event group members (for organizers)
+router.get('/events/:eventId/group/members', async (
+  req: Request<{ eventId: string }>, 
+  res: Response
+) => {
+  try {
+    const { eventId } = req.params;
+    
+    // Verify event exists
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    
+    // Get all approved submissions with commitments
+    const approvedSubmissions = await Submission.find({
+      eventId,
+      status: 'approved',
+      commitment: { $exists: true, $ne: null }
+    }).select('commitment values.name address createdAt').lean();
+    
+    const members = approvedSubmissions.map(submission => ({
+      commitment: submission.commitment,
+      name: submission.values?.name || 'Anonymous',
+      address: submission.address,
+      approvedAt: submission.createdAt
+    }));
+    
+    res.json({
+      eventId,
+      totalMembers: members.length,
+      members
+    });
+  } catch (error) {
+    console.error('Error fetching group members:', error);
+    res.status(500).json({ error: 'Failed to fetch group members' });
   }
 });
 

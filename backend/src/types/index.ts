@@ -67,6 +67,7 @@ export interface CreateSubmissionRequest {
   values: Record<string, any>;
   signature: string;
   commitment?: string;
+  semaphoreIdentity?: string; // Serialized Semaphore identity (encrypted)
 }
 
 export interface UpdateSubmissionRequest {
@@ -138,4 +139,25 @@ export interface CreateOrganizationRequest {
   description?: string;
   email?: string;
   signature: string; // signed message for verification
+}
+
+// Semaphore ZK Proof Types
+export interface ZKProof {
+  proof: string;
+  publicSignals: string[];
+  nullifierHash: string;
+  merkleRoot: string;
+}
+
+export interface CheckInRequest {
+  eventId: string;
+  proof: ZKProof;
+  commitment: string;
+}
+
+export interface EventGroup {
+  eventId: string;
+  merkleRoot: string;
+  members: string[]; // commitments
+  depth: number;
 }

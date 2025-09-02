@@ -3,8 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import QRScanner from "@/components/QRScanner";
+import { ZKProofService } from "@/Services/ZKProofService";
 
 type QRData = {
+  eventId: string;
+  commitment: string;
+  type: string;
+};
+
+type LegacyQRData = {
   eventId: string;
   eventName: string;
   participantAddress: string;
@@ -30,53 +37,104 @@ export default function QRScannerPage() {
 
     try {
       // Parse the QR code data
-      const qrData: QRData = JSON.parse(qrDataString);
+      const parsedData = JSON.parse(qrDataString);
       
-      // Validate the QR code structure
-      if (!qrData.eventId || !qrData.participantAddress || !qrData.type) {
+      // Check if it's a Semaphore-based QR code (new format)
+      if (parsedData.commitment && parsedData.eventId) {
+        const qrData: QRData = parsedData;
+        
+        // Validate the QR code structure
+        if (!qrData.eventId || !qrData.commitment || !qrData.type) {
+          setValidationResult({
+            isValid: false,
+            message: "Invalid Semaphore QR code format",
+            error: "Missing required fields"
+          });
+          return;
+        }
+
+        // Validate commitment format (should be a valid bigint string)
+        try {
+          BigInt(qrData.commitment);
+        } catch {
+          setValidationResult({
+            isValid: false,
+            message: "Invalid commitment format",
+            error: "Commitment must be a valid number"
+          });
+          return;
+        }
+
+        // Check if the commitment is in the event group
+        try {
+          const eventGroup = await ZKProofService.getEventGroup(qrData.eventId);
+          const isMember = eventGroup.members.includes(qrData.commitment);
+          
+          if (!isMember) {
+            setValidationResult({
+              isValid: false,
+              message: "Invalid ticket",
+              error: "Commitment not found in approved members"
+            });
+            return;
+          }
+
+          setValidationResult({
+            isValid: true,
+            message: "Valid Semaphore ticket",
+            data: qrData
+          });
+        } catch (error) {
+          setValidationResult({
+            isValid: false,
+            message: "Failed to validate ticket",
+            error: error instanceof Error ? error.message : "Unknown error"
+          });
+        }
+      } 
+      // Check if it's a legacy QR code (old format)
+      else if (parsedData.participantAddress && parsedData.eventName) {
+        const legacyData: LegacyQRData = parsedData;
+        
+        // Validate the legacy QR code structure
+        if (!legacyData.eventId || !legacyData.participantAddress || !legacyData.type) {
+          setValidationResult({
+            isValid: false,
+            message: "Invalid legacy QR code format",
+            error: "Missing required fields"
+          });
+          return;
+        }
+
+        // Check if the approval date is valid
+        const approvalDate = new Date(legacyData.approvalDate);
+        
+        if (isNaN(approvalDate.getTime())) {
+          setValidationResult({
+            isValid: false,
+            message: "Invalid approval date",
+            error: "QR code has invalid date format"
+          });
+          return;
+        }
+
+        // For legacy tickets, we'll consider them valid if they have the right structure
+        setValidationResult({
+          isValid: true,
+          message: "Valid legacy ticket",
+          data: {
+            eventId: legacyData.eventId,
+            commitment: legacyData.participantAddress, // Use address as commitment for legacy
+            type: legacyData.type
+          }
+        });
+      } else {
         setValidationResult({
           isValid: false,
-          message: "Invalid QR code format",
-          error: "Missing required fields"
+          message: "Unknown QR code format",
+          error: "QR code doesn't match expected formats"
         });
-        return;
       }
-
-      // Check if it's an event ticket
-      if (qrData.type !== 'event-ticket') {
-        setValidationResult({
-          isValid: false,
-          message: "Not a valid event ticket",
-          error: "QR code is not an event ticket"
-        });
-        return;
-      }
-
-      // Check if the approval date is valid
-      const approvalDate = new Date(qrData.approvalDate);
-      const now = new Date();
-      
-      if (isNaN(approvalDate.getTime())) {
-        setValidationResult({
-          isValid: false,
-          message: "Invalid approval date",
-          error: "QR code has invalid date format"
-        });
-        return;
-      }
-
-      // For demo purposes, we'll consider all valid QR codes as valid
-      // In a real implementation, you might want to:
-      // - Check against a database of approved tickets
-      // - Verify the signature
-      // - Check if the ticket has been used before
-      // - Validate against the event details
-
-      setValidationResult({
-        isValid: true,
-        message: "Valid event ticket",
-        data: qrData
-      });
 
     } catch (error) {
       setValidationResult({
@@ -179,28 +237,24 @@ export default function QRScannerPage() {
                   <h3 className="font-semibold text-foreground">Ticket Details</h3>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-foreground/60">Event:</span>
-                      <span className="font-medium">{validationResult.data.eventName}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-foreground/60">Participant:</span>
-                      <span className="font-medium">{validationResult.data.participantName}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-foreground/60">Wallet:</span>
-                      <span className="font-mono text-xs">
-                        {validationResult.data.participantAddress.slice(0, 6)}...{validationResult.data.participantAddress.slice(-4)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-foreground/60">Approved:</span>
-                      <span className="font-medium">
-                        {new Date(validationResult.data.approvalDate).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
                       <span className="text-foreground/60">Event ID:</span>
                       <span className="font-mono text-xs">{validationResult.data.eventId}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-foreground/60">Commitment:</span>
+                      <span className="font-mono text-xs">
+                        {validationResult.data.commitment.slice(0, 8)}...{validationResult.data.commitment.slice(-8)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-foreground/60">Type:</span>
+                      <span className="font-medium">{validationResult.data.type}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-foreground/60">Format:</span>
+                      <span className="font-medium">
+                        {validationResult.message.includes('Semaphore') ? 'ZK Proof' : 'Legacy'}
+                      </span>
                     </div>
                   </div>
                 </div>

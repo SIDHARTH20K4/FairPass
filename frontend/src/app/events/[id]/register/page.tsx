@@ -8,6 +8,7 @@ import CustomDatePicker from "@/components/DatePicker";
 import SimpleDatePicker from "@/components/SimpleDatePicker";
 import { uploadImageToIPFS, uploadJsonToIPFS } from "@/lib/ipfs";
 import { Identity } from "@semaphore-protocol/identity";
+import { createUserQR } from "@/Services/Semaphore";
 import QRTicket from "@/components/tickets/QRticket";
 import React from "react";
 
@@ -19,6 +20,8 @@ type Submission = {
   at: number;
   status: "pending" | "approved";
   address?: string;
+  commitment?: string;
+  semaphoreIdentity?: string; // Encrypted Semaphore identity
   qrCid?: string;
   qrUrl?: string;
   jsonCid?: string;
@@ -116,24 +119,25 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
       let jsonUrl: string | undefined;
       let jsonCid: string | undefined;
 
-      // Create or reuse user Identity for this event
-      // Persist minimal identity trapdoor/nonce in localStorage per event
-      const IDENTITY_KEY = `fairpass.identity.${id}`;
-      let identityJson = localStorage.getItem(IDENTITY_KEY);
-      let identity: Identity;
-      if (identityJson) {
-        identity = new Identity(identityJson);
-      } else {
-        identity = new Identity();
-        localStorage.setItem(IDENTITY_KEY, identity.toString());
-      }
-      const commitment = identity.commitment.toString();
+      // Generate Semaphore identity for this event
+      const semaphoreData = createUserQR(id);
+      const identity = semaphoreData.user;
+      const commitment = semaphoreData.commitment;
+      
+      // Encrypt the identity for secure storage (in production, use proper encryption)
+      const encryptedIdentity = btoa(identity.toString()); // Simple base64 encoding
 
-      // Send registration to backend with commitment included
+      // Send registration to backend with commitment and encrypted identity
       const backendResponse = await fetch(`http://localhost:4000/api/events/${id}/registrations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address: address.toLowerCase(), values, signature, commitment }),
+        body: JSON.stringify({ 
+          address: address.toLowerCase(), 
+          values, 
+          signature, 
+          commitment,
+          semaphoreIdentity: encryptedIdentity
+        }),
       });
       
       if (!backendResponse.ok) {

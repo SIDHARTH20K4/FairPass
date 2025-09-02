@@ -375,6 +375,19 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                         approvalDate={new Date().toISOString()}
                       />
                       
+                      {/* Check-In Button */}
+                      <div className="text-center">
+                        <Link 
+                          href={`/events/${id}/checkin`}
+                          className="btn-primary"
+                        >
+                          🎫 Check In Anonymously
+                        </Link>
+                        <p className="text-xs text-foreground/60 mt-2">
+                          Use your Semaphore identity for private check-in
+                        </p>
+                      </div>
+                      
                       {/* Last Updated Info */}
                       {lastChecked && (
                         <div className="text-center text-xs text-foreground/60">

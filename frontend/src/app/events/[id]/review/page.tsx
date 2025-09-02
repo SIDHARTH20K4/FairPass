@@ -233,7 +233,15 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
     <main className="mx-auto max-w-4xl px-4 py-12">
       <div className="mb-6 flex items-center justify-between">
         <Link href={`/events/${id}`} className="text-sm hover:underline">← Back to event</Link>
-        <h1 className="text-2xl font-semibold tracking-tight">Review registrations</h1>
+        <div className="flex items-center gap-4">
+          <Link 
+            href={`/host/events/${id}/group`}
+            className="btn-secondary text-sm"
+          >
+            🛡️ Group Management
+          </Link>
+          <h1 className="text-2xl font-semibold tracking-tight">Review registrations</h1>
+        </div>
       </div>
       
 
