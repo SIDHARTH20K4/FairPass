@@ -1,14 +1,9 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
 
-contract Counter {
-    uint256 public number;
+import "../EventFactory.sol";
+import "../EventImplementation.sol";
+import "../EventTicket.sol";
 
-    function setNumber(uint256 newNumber) public {
-        number = newNumber;
-    }
-
-    function increment() public {
-        number++;
-    }
-}
+// This file serves as a placeholder for importing the main contracts
+// The actual tests will be in the test/ directory

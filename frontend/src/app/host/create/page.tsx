@@ -12,6 +12,8 @@ import { apiCreateEvent } from "@/lib/api";
 import { useEventFactory } from "@/hooks/useWeb3";
 import { EventType, web3Service } from "@/services/Web3Service";
 import { WEB3_CONFIG } from "@/config/web3";
+import WalletConnect from "@/components/WalletConnect";
+import TransactionStatus from "@/components/TransactionStatus";
 
 const LOCATIONS = [
   "Singapore","Mumbai","Bengaluru","Delhi","Jakarta","Seoul","Tokyo","Sydney","Taipei","Dubai","London","Paris","Berlin","Lisbon","Amsterdam","San Francisco","New York","Toronto","Austin","Buenos Aires","São Paulo","Cape Town","Nairobi","Worldwide",
@@ -51,6 +53,7 @@ export default function CreateEventPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [useBlockchain, setUseBlockchain] = useState(true);
   const [blockchainEventAddress, setBlockchainEventAddress] = useState<string | null>(null);
+  const [transactionHash, setTransactionHash] = useState<string | null>(null);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -120,6 +123,7 @@ export default function CreateEventPage() {
           });
 
           setBlockchainEventAddress(blockchainEventAddress);
+          setTransactionHash(blockchainEventAddress); // For transaction status display
         } catch (blockchainError) {
           console.error('Blockchain event creation failed:', blockchainError);
           alert(`Blockchain event creation failed: ${(blockchainError as Error).message}`);
@@ -516,19 +520,14 @@ export default function CreateEventPage() {
                       {!isConnected ? (
                         <div className="text-center py-4">
                           <p className="text-foreground/60 mb-3">Connect your wallet to create blockchain events</p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              // This will be handled by the wallet connection in the header
-                              alert('Please connect your wallet using the wallet button in the header');
+                          <WalletConnect 
+                            onConnect={(address) => {
+                              console.log('Wallet connected:', address);
                             }}
-                            className="btn-primary"
-                          >
-                            Connect Wallet
-                          </button>
+                          />
                         </div>
                       ) : (
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           <div className="flex items-center gap-2 text-sm">
                             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                             <span className="text-foreground/80">Wallet Connected</span>
@@ -540,6 +539,17 @@ export default function CreateEventPage() {
                             <p className="text-xs text-red-500">
                               {web3Error}
                             </p>
+                          )}
+                          {transactionHash && (
+                            <TransactionStatus 
+                              hash={transactionHash}
+                              onSuccess={(receipt) => {
+                                console.log('Transaction confirmed:', receipt);
+                              }}
+                              onError={(error) => {
+                                console.error('Transaction failed:', error);
+                              }}
+                            />
                           )}
                         </div>
                       )}
