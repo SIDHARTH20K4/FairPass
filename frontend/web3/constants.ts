@@ -1,5 +1,5 @@
 export const eventFactoryAddress = "0x9016F1b7DA5C91d6479aAF99A8765Cb4ED0668bE";
-export cost eventFactoryABI = [
+export const eventFactoryABI = [
 	{
 		"inputs": [],
 		"stateMutability": "nonpayable",
