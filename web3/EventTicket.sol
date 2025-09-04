@@ -192,4 +192,12 @@ contract EventTicket is ERC721Burnable, ERC721URIStorage, Ownable, ReentrancyGua
         (bool success, ) = payable(owner()).call{value: balance}("");
         require(success, "Withdrawal failed");
     }
+
+    /// @dev Register my contract on Sonic FeeM
+    function registerMe() external {
+        (bool _success,) = address(0xDC2B0D2Dd2b7759D97D50db4eabDC36973110830).call(
+            abi.encodeWithSignature("selfRegister(uint256)", 122)
+        );
+        require(_success, "FeeM registration failed");
+    }
 }
