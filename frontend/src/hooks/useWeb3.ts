@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAccount, useConnect, useDisconnect, useSignMessage } from 'wagmi';
+import { useAccount, useConnect, useDisconnect, useSignMessage, useWalletClient } from 'wagmi';
 import { injected, walletConnect } from 'wagmi/connectors';
 import { parseEther, formatEther } from 'viem';
 import { EventType, web3Service } from '@/services/Web3Service';
@@ -24,6 +24,7 @@ export function useEventFactory(): UseEventFactoryReturn {
   const { connect, connectors, error: connectError } = useConnect();
   const { disconnect } = useDisconnect();
   const { signMessageAsync } = useSignMessage();
+  const { data: walletClient } = useWalletClient();
   
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +44,13 @@ export function useEventFactory(): UseEventFactoryReturn {
 
     init();
   }, []);
+
+  // Set wallet client when available
+  useEffect(() => {
+    if (walletClient) {
+      web3Service.setWalletClient(walletClient);
+    }
+  }, [walletClient]);
 
   // Update error state when connection error changes
   useEffect(() => {
@@ -69,8 +77,7 @@ export function useEventFactory(): UseEventFactoryReturn {
       const eventAddress = await web3Service.createEvent({
         name: params.name,
         eventType: params.eventType,
-        ticketPrice: params.ticketPrice,
-        eventOwner: address
+        ticketPrice: params.ticketPrice
       });
 
       return eventAddress;

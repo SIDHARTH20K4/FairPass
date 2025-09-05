@@ -1,5 +1,30 @@
-import { createPublicClient, createWalletClient, http, parseEther, formatEther, type Address, type Hash } from 'viem';
-import { sonic } from 'viem/chains';
+import { createPublicClient, createWalletClient, http, parseEther, formatEther, type Address, type Hash, defineChain } from 'viem';
+
+// Define Sonic Testnet chain
+const sonicTestnet = defineChain({
+  id: 14601,
+  name: 'Sonic Testnet',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'Sonic',
+    symbol: 'S',
+  },
+  rpcUrls: {
+    default: {
+      http: ['https://rpc.testnet.soniclabs.com'],
+    },
+    public: {
+      http: ['https://rpc.testnet.soniclabs.com'],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: 'SonicScan',
+      url: 'https://testnet.sonicscan.org',
+    },
+  },
+  testnet: true,
+});
 
 // Contract ABIs (simplified - you'll need the full ABIs from your compiled contracts)
 const EVENT_FACTORY_ABI = [
@@ -170,17 +195,24 @@ class Web3Service {
     try {
       const { name, eventType, ticketPrice, eventOwner } = params;
 
-      // Prepare transaction
+      // Prepare transaction with optimized gas settings for Sonic testnet
       const hash = await this.walletClient.writeContract({
         address: this.eventFactoryAddress!,
         abi: EVENT_FACTORY_ABI,
         functionName: 'createEvent',
         args: [name, eventType, BigInt(ticketPrice)],
-        account: eventOwner
+        account: eventOwner,
+        gas: BigInt(3000000), // Higher gas limit for testnet
+        gasPrice: BigInt(2000000000) // 2 gwei gas price (higher for faster confirmation)
       });
 
-      // Wait for transaction confirmation
-      const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
+      // Wait for transaction confirmation with extended timeout
+      const receipt = await this.publicClient.waitForTransactionReceipt({ 
+        hash,
+        timeout: 300000, // 5 minutes timeout
+        confirmations: 1,
+        pollingInterval: 3000 // Check every 3 seconds
+      });
       
       // Find the EventCreated event to get the new event address
       const eventCreatedLog = receipt.logs.find((log: any) => {
@@ -208,6 +240,12 @@ class Web3Service {
       throw new Error('Event creation transaction completed but event address not found');
     } catch (error) {
       console.error('Failed to create event:', error);
+      
+      // If it's a timeout error, provide more helpful information
+      if (error instanceof Error && error.message.includes('timeout')) {
+        throw new Error(`Transaction submitted but timed out waiting for confirmation. Transaction hash: ${hash}. Check the transaction status on SonicScan: https://testnet.sonicscan.org/tx/${hash}`);
+      }
+      
       throw error;
     }
   }

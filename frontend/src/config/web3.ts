@@ -1,13 +1,13 @@
 // Web3 Configuration
 export const WEB3_CONFIG = {
-  // Sonic Network Configuration
-  CHAIN_ID: 146,
-  CHAIN_NAME: 'Sonic',
-  RPC_URL: process.env.NEXT_PUBLIC_SONIC_RPC_URL || 'https://rpc.soniclabs.com',
-  BLOCK_EXPLORER_URL: 'https://explorer.soniclabs.com',
+  // Sonic Testnet Configuration
+  CHAIN_ID: 14601, // Sonic testnet
+  CHAIN_NAME: 'Sonic Testnet',
+  RPC_URL: process.env.NEXT_PUBLIC_SONIC_TESTNET_RPC_URL || 'https://rpc.testnet.soniclabs.com',
+  BLOCK_EXPLORER_URL: 'https://testnet.sonicscan.org',
   
-  // Contract Addresses
-  EVENT_FACTORY_ADDRESS: process.env.NEXT_PUBLIC_EVENT_FACTORY_ADDRESS as `0x${string}`,
+  // Contract Addresses (Testnet - will need to be deployed)
+  EVENT_FACTORY_ADDRESS: process.env.NEXT_PUBLIC_EVENT_FACTORY_ADDRESS as `0x${string}` || '0x0000000000000000000000000000000000000000', // Placeholder - needs deployment
   PLATFORM_OWNER_ADDRESS: process.env.NEXT_PUBLIC_PLATFORM_OWNER_ADDRESS as `0x${string}`,
   
   // Gas Configuration
