@@ -236,22 +236,6 @@ export default function CreateEventPage() {
             Share your event with the world. All events are deployed as smart contracts with NFT tickets.
           </p>
           
-          {/* Testnet Notice */}
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 max-w-2xl mx-auto mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
-                <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="text-left">
-                <p className="font-medium text-blue-900 dark:text-blue-100">Sonic Testnet Mode</p>
-                <p className="text-sm text-blue-800 dark:text-blue-200">
-                  Currently using Sonic testnet. No real S tokens required for testing.
-                </p>
-              </div>
-            </div>
-          </div>
           
           {/* Wallet Connection Notice */}
           {!isConnected && (
@@ -282,20 +266,20 @@ export default function CreateEventPage() {
               <div key={step.id} className="flex items-center">
                 <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-200 ${
                   currentStep >= step.id 
-                    ? 'border-foreground bg-foreground text-foreground-foreground' 
-                    : 'border-foreground/20 text-foreground/40'
+                    ? 'border-blue-600 bg-blue-600 text-white' 
+                    : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400'
                 }`}>
                   {currentStep > step.id ? (
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   ) : (
-                    <span className="text-sm font-medium">{step.id}</span>
+                    <span className="text-sm font-semibold">{step.id}</span>
                   )}
                 </div>
                 {index < steps.length - 1 && (
                   <div className={`w-16 h-0.5 mx-4 transition-all duration-200 ${
-                    currentStep > step.id ? 'bg-foreground' : 'bg-foreground/20'
+                    currentStep > step.id ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
                   }`}></div>
                 )}
               </div>
@@ -723,56 +707,6 @@ export default function CreateEventPage() {
                             </div>
                           )}
                           
-                          {web3Error && (
-                            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-                              <div className="flex items-start gap-3">
-                                <div className="w-5 h-5 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                                  <svg className="w-3 h-3 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                                  </svg>
-                                </div>
-                                <div className="flex-1">
-                                  <p className="text-sm font-medium text-red-900 dark:text-red-100 mb-2">
-                                    {web3Error.includes('timeout') ? 'Transaction Timeout' : 'Contract Not Deployed'}
-                                  </p>
-                                  <p className="text-sm text-red-800 dark:text-red-200 mb-3">
-                                    {web3Error}
-                                  </p>
-                                  
-                                  {web3Error.includes('timeout') ? (
-                                    <div className="bg-yellow-100 dark:bg-yellow-900/30 rounded-lg p-3">
-                                      <p className="text-xs font-medium text-yellow-900 dark:text-yellow-100 mb-2">
-                                        Transaction may still be processing:
-                                      </p>
-                                      <p className="text-xs text-yellow-800 dark:text-yellow-200 mb-2">
-                                        Check the transaction status on Sonic Explorer to see if it succeeded.
-                                      </p>
-                                      <a 
-                                        href={`https://testnet.sonicscan.org/tx/${web3Error.includes('0x') ? web3Error.match(/0x[a-fA-F0-9]{64}/)?.[0] || '0x09477358c4455bf52aa683e9c41742ae400d6195572884edef6e570eb11781b1' : '0x09477358c4455bf52aa683e9c41742ae400d6195572884edef6e570eb11781b1'}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 text-xs text-yellow-600 dark:text-yellow-400 hover:underline"
-                                      >
-                                        Check Transaction Status
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                        </svg>
-                                      </a>
-                                    </div>
-                                  ) : (
-                                    <div className="bg-red-100 dark:bg-red-900/30 rounded-lg p-3">
-                                      <p className="text-xs font-medium text-red-900 dark:text-red-100 mb-2">
-                                        Quick Fix:
-                                      </p>
-                                      <code className="text-xs text-red-800 dark:text-red-200 block">
-                                        cd web3 && forge script script/DeploySonicTestnet.s.sol --rpc-url sonic_testnet --broadcast
-                                      </code>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          )}
                           
                           {transactionHash && (
                             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">

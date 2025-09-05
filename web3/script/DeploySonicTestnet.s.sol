@@ -26,6 +26,6 @@ contract DeploySonicTestnet is Script {
         console.log("EventFactory address:", address(eventFactory));
         console.log("Add this to your .env file:");
         console.log("NEXT_PUBLIC_EVENT_FACTORY_ADDRESS=", address(eventFactory));
-        console.log("View on Sonic Explorer: https://explorer.testnet.soniclabs.com/address/", address(eventFactory));
+        console.log("View on Sonic Explorer: https://testnet.sonicscan.org/address/", address(eventFactory));
     }
 }

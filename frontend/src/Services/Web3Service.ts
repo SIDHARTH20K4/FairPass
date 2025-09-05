@@ -120,7 +120,7 @@ class Web3Service {
     }
 
     let transactionHash: string | null = null;
-    
+
     try {
       const { name, eventType, ticketPrice, eventOwner } = params;
 
@@ -128,8 +128,8 @@ class Web3Service {
       console.log('Creating event with parameters:');
       console.log('- EventFactory Address:', this.eventFactoryAddress);
       console.log('- Name:', name);
-      console.log('- EventType:', eventType);
-      console.log('- TicketPrice:', ticketPrice);
+      console.log('- EventType:', eventType, '(type:', typeof eventType, ')');
+      console.log('- TicketPrice:', ticketPrice, '(type:', typeof ticketPrice, ')');
       console.log('- EventOwner:', eventOwner);
 
       // First, let's check if the EventFactory contract is deployed and accessible
@@ -147,6 +147,18 @@ class Web3Service {
           functionName: 'platformOwner',
         });
         console.log('✅ EventFactory platformOwner:', platformOwner);
+        
+        // Test if we can call getAllEvents to verify the contract is working
+        try {
+          const allEvents = await this.publicClient.readContract({
+            address: this.eventFactoryAddress!,
+            abi: EVENT_FACTORY_ABI,
+            functionName: 'getAllEvents',
+          });
+          console.log('✅ EventFactory getAllEvents call successful, found', allEvents.length, 'events');
+        } catch (readError) {
+          console.warn('⚠️ EventFactory getAllEvents call failed:', readError);
+        }
       } catch (contractError) {
         console.error('EventFactory contract check failed:', contractError);
         if (contractError instanceof Error && contractError.message.includes('not deployed')) {
@@ -166,12 +178,24 @@ class Web3Service {
           address: this.eventFactoryAddress!,
           abi: EVENT_FACTORY_ABI,
           functionName: 'createEvent',
-          args: [name, eventType, BigInt(ticketPrice)],
-          account: eventOwner,
+          args: [name, Number(eventType), BigInt(ticketPrice)],
+          account: this.walletClient.account,
         });
         console.log('✅ Gas estimate:', gasEstimate.toString());
       } catch (gasError) {
         console.error('❌ Gas estimation failed:', gasError);
+        
+        // Try to decode the error if it's a contract error
+        if (gasError && typeof gasError === 'object' && 'data' in gasError) {
+          console.error('Error data:', gasError.data);
+          console.error('Error signature:', gasError.data?.error?.data || 'No signature found');
+        }
+        
+        // Check if it's a specific revert reason
+        if (gasError instanceof Error && gasError.message.includes('0x1e4fbdf7')) {
+          throw new Error(`Contract function reverted with signature 0x1e4fbdf7. This usually indicates a require() statement failed in the smart contract. Please check that the EventFactory contract is properly deployed and that all parameters are valid.`);
+        }
+        
         throw new Error(`Gas estimation failed: ${gasError instanceof Error ? gasError.message : 'Unknown error'}`);
       }
 
@@ -180,8 +204,8 @@ class Web3Service {
         address: this.eventFactoryAddress!,
         abi: EVENT_FACTORY_ABI,
         functionName: 'createEvent',
-        args: [name, eventType, BigInt(ticketPrice)],
-        account: eventOwner,
+        args: [name, Number(eventType), BigInt(ticketPrice)],
+        account: this.walletClient.account,
         gas: BigInt('3000000'), // Higher gas limit for testnet
         gasPrice: BigInt('2000000000') // 2 gwei gas price (higher for faster confirmation)
       });
@@ -212,7 +236,7 @@ class Web3Service {
         console.log('❌ Transaction failed with status:', receipt.status);
         throw new Error(`Transaction failed with status: ${receipt.status}. This usually means the smart contract call reverted. Check the transaction on SonicScan: https://testnet.sonicscan.org/tx/${transactionHash}`);
       }
-
+      
       // Find the EventCreated event to get the new event address
       let eventCreatedLog = null;
       
@@ -330,25 +354,25 @@ class Web3Service {
               console.log('Transaction was confirmed despite timeout, processing...');
               // Transaction is confirmed, try to find the event
               const eventCreatedLog = receipt.logs.find((log: any) => {
-                try {
-                  const decoded = this.publicClient.decodeEventLog({
-                    abi: EVENT_FACTORY_ABI,
-                    data: log.data,
-                    topics: log.topics
-                  });
-                  return decoded.eventName === 'EventCreated';
-                } catch {
-                  return false;
-                }
-              });
+        try {
+          const decoded = this.publicClient.decodeEventLog({
+            abi: EVENT_FACTORY_ABI,
+            data: log.data,
+            topics: log.topics
+          });
+          return decoded.eventName === 'EventCreated';
+        } catch {
+          return false;
+        }
+      });
 
-              if (eventCreatedLog) {
-                const decoded = this.publicClient.decodeEventLog({
-                  abi: EVENT_FACTORY_ABI,
-                  data: eventCreatedLog.data,
-                  topics: eventCreatedLog.topics
-                });
-                return decoded.args.eventAddress;
+      if (eventCreatedLog) {
+        const decoded = this.publicClient.decodeEventLog({
+          abi: EVENT_FACTORY_ABI,
+          data: eventCreatedLog.data,
+          topics: eventCreatedLog.topics
+        });
+        return decoded.args.eventAddress;
               }
             }
           } catch (receiptError) {
