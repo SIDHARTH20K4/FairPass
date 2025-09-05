@@ -10,7 +10,7 @@ import { uploadImageToIPFS } from "@/lib/ipfs";
 import { useAuth } from "@/hooks/useAuth";
 import { apiCreateEvent } from "@/lib/api";
 import { useEventFactory } from "@/hooks/useWeb3";
-import { EventType, web3Service } from "@/services/Web3Service";
+import { EventType, web3Service } from "@/Services/Web3Service";
 import { WEB3_CONFIG } from "@/config/web3";
 import WalletConnect from "@/components/WalletConnect";
 import TransactionStatus from "@/components/TransactionStatus";
@@ -54,6 +54,7 @@ export default function CreateEventPage() {
   const [useBlockchain, setUseBlockchain] = useState(true); // Always true for blockchain events
   const [blockchainEventAddress, setBlockchainEventAddress] = useState<string | null>(null);
   const [transactionHash, setTransactionHash] = useState<string | null>(null);
+  const [contractStatus, setContractStatus] = useState<'checking' | 'deployed' | 'not-deployed' | 'error'>('checking');
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -69,6 +70,27 @@ export default function CreateEventPage() {
       setOrganizationDescription(organization.description || "");
     }
   }, [organization]);
+
+  // Check contract deployment status
+  useEffect(() => {
+    const checkContractStatus = async () => {
+      if (isConnected && isInitialized) {
+        try {
+          setContractStatus('checking');
+          // Try to read from the contract to check if it's deployed
+          await web3Service.publicClient?.getBytecode({ 
+            address: web3Service.eventFactoryAddress as `0x${string}` 
+          });
+          setContractStatus('deployed');
+        } catch (error) {
+          console.log('Contract status check failed:', error);
+          setContractStatus('not-deployed');
+        }
+      }
+    };
+
+    checkContractStatus();
+  }, [isConnected, isInitialized]);
 
   const isValid = name && bannerDataUrl && date && time && location && isConnected;
 
@@ -116,19 +138,34 @@ export default function CreateEventPage() {
           const ticketPrice = isPaid && price ? web3Service.parseEther(price) : "0";
 
           // Create event on blockchain
+          console.log('Creating event with params:', { name, eventType, ticketPrice });
           blockchainEventAddress = await createEvent({
             name,
             eventType,
             ticketPrice
           });
 
+          console.log('Event created successfully! Contract address:', blockchainEventAddress);
           setBlockchainEventAddress(blockchainEventAddress);
           setTransactionHash(blockchainEventAddress); // For transaction status display
         } catch (blockchainError) {
           console.error('Blockchain event creation failed:', blockchainError);
-          alert(`Blockchain event creation failed: ${(blockchainError as Error).message}`);
+          const errorMessage = (blockchainError as Error).message;
+          
+          // Provide more helpful error messages
+          if (errorMessage.includes('not deployed') || errorMessage.includes('not configured')) {
+            alert(`🚫 Contract Setup Required\n\n${errorMessage}\n\nPlease contact the platform administrator to deploy the EventFactory contract, or check your environment configuration.`);
+          } else if (errorMessage.includes('Transaction failed')) {
+            alert(`❌ Transaction Failed\n\n${errorMessage}\n\nThis usually means the smart contract call reverted. Please check the transaction details on SonicScan.`);
+          } else {
+            alert(`❌ Blockchain Error\n\n${errorMessage}`);
+          }
           return;
         }
+      } else {
+        // Web3 service not initialized or wallet not connected
+        alert('Please ensure your wallet is connected and Web3 service is initialized before creating an event.');
+        return;
       }
 
       // Create event in backend database
@@ -157,9 +194,13 @@ export default function CreateEventPage() {
       
       // Show success message
       if (blockchainEventAddress) {
-        alert(`Event created successfully!\nBlockchain Address: ${blockchainEventAddress}`);
+        // Show success message with contract address
+        const successMessage = `🎉 Event created successfully!\n\nContract Address: ${blockchainEventAddress}\n\nYou can view it on SonicScan or continue with the event setup.`;
+        alert(successMessage);
       } else {
-        alert('Event created successfully!');
+        // This should never happen now due to the validation above
+        alert('Event created in database but blockchain contract creation failed. Please try again.');
+        return;
       }
       
       router.replace('/host/dashboard');
@@ -642,6 +683,46 @@ export default function CreateEventPage() {
                             </div>
                           </div>
                           
+                          {/* Contract Status Indicator */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              {contractStatus === 'checking' && (
+                                <>
+                                  <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
+                                  <span className="font-medium text-foreground">Checking Contract...</span>
+                                </>
+                              )}
+                              {contractStatus === 'deployed' && (
+                                <>
+                                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                                  <span className="font-medium text-foreground">EventFactory Deployed</span>
+                                </>
+                              )}
+                              {contractStatus === 'not-deployed' && (
+                                <>
+                                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                                  <span className="font-medium text-red-600">EventFactory Not Deployed</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {contractStatus === 'not-deployed' && (
+                            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                              <div className="flex items-start gap-3">
+                                <svg className="w-5 h-5 text-red-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                </svg>
+                                <div>
+                                  <h4 className="font-medium text-red-800 dark:text-red-200">Contract Setup Required</h4>
+                                  <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                                    The EventFactory contract is not deployed. Please contact the platform administrator to deploy the contract first.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          
                           {web3Error && (
                             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
                               <div className="flex items-start gap-3">
@@ -710,22 +791,60 @@ export default function CreateEventPage() {
                           )}
                           
                           {blockchainEventAddress && (
-                            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                              <h5 className="font-medium text-green-900 dark:text-green-100 mb-2">Contract Deployed Successfully!</h5>
-                              <p className="text-sm text-green-800 dark:text-green-200 font-mono break-all">
-                                {blockchainEventAddress}
-                              </p>
-                              <a 
-                                href={`https://testnet.sonicscan.org/address/${blockchainEventAddress}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400 hover:underline mt-2"
-                              >
-                                View on SonicScan
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                </svg>
-                              </a>
+                            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6">
+                              <div className="flex items-center gap-2 mb-3">
+                                <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </div>
+                                <h5 className="font-semibold text-green-900 dark:text-green-100 text-lg">Event Contract Deployed Successfully!</h5>
+                              </div>
+                              
+                              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-green-200 dark:border-green-700">
+                                <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Contract Address:</label>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm text-gray-900 dark:text-gray-100 font-mono break-all flex-1">
+                                    {blockchainEventAddress}
+                                  </p>
+                                  <button
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(blockchainEventAddress);
+                                      alert('Contract address copied to clipboard!');
+                                    }}
+                                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                                    title="Copy address"
+                                  >
+                                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </div>
+                              
+                              <div className="flex gap-2 mt-3">
+                                <a 
+                                  href={`https://testnet.sonicscan.org/address/${blockchainEventAddress}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                  View on SonicScan
+                                </a>
+                                <button
+                                  onClick={() => router.push(`/events/${blockchainEventAddress}`)}
+                                  className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                  </svg>
+                                  View Event
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>

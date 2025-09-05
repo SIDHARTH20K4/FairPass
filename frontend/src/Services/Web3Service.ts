@@ -1,4 +1,5 @@
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, type Address, type Hash, defineChain } from 'viem';
+import { eventFactoryABI, eventImplementationABI, eventTicketABI } from '../../web3/constants';
 
 // Define Sonic Testnet chain
 const sonicTestnet = defineChain({
@@ -26,93 +27,10 @@ const sonicTestnet = defineChain({
   testnet: true,
 });
 
-// Contract ABIs (simplified - you'll need the full ABIs from your compiled contracts)
-const EVENT_FACTORY_ABI = [
-  {
-    "inputs": [
-      { "name": "name", "type": "string" },
-      { "name": "EventType", "type": "uint8" },
-      { "name": "ticketPrice", "type": "uint256" }
-    ],
-    "name": "createEvent",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "name": "eventAddress", "type": "address" },
-      { "indexed": false, "name": "name", "type": "string" }
-    ],
-    "name": "EventCreated",
-    "type": "event"
-  }
-] as const;
-
-const EVENT_IMPLEMENTATION_ABI = [
-  {
-    "inputs": [
-      { "name": "metadataURI", "type": "string" }
-    ],
-    "name": "buyTicket",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "name": "user", "type": "address" },
-      { "name": "metadataURI", "type": "string" }
-    ],
-    "name": "mintForUser",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "name": "tokenId", "type": "uint256" }
-    ],
-    "name": "checkIn",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
-] as const;
-
-const EVENT_TICKET_ABI = [
-  {
-    "inputs": [
-      { "name": "tokenId", "type": "uint256" },
-      { "name": "price", "type": "uint256" }
-    ],
-    "name": "listForResale",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "name": "tokenId", "type": "uint256" }
-    ],
-    "name": "buyResale",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "name": "tokenId", "type": "uint256" }
-    ],
-    "name": "ownerOf",
-    "outputs": [
-      { "name": "", "type": "address" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  }
-] as const;
+// Use the full ABIs from constants
+const EVENT_FACTORY_ABI = eventFactoryABI;
+const EVENT_IMPLEMENTATION_ABI = eventImplementationABI;
+const EVENT_TICKET_ABI = eventTicketABI;
 
 export enum EventType {
   FREE = 0,
@@ -124,13 +42,19 @@ export interface CreateEventParams {
   name: string;
   eventType: EventType;
   ticketPrice: string; // in wei as string
-  eventOwner: Address;
+  eventOwner?: Address;
 }
 
 export interface BuyTicketParams {
   eventAddress: Address;
   metadataURI: string;
-  value?: string; // in wei as string for paid events
+  value?: string; // in wei as string
+}
+
+export interface MintForUserParams {
+  eventAddress: Address;
+  user: Address;
+  metadataURI: string;
 }
 
 export interface ListTicketParams {
@@ -139,21 +63,25 @@ export interface ListTicketParams {
   price: string; // in wei as string
 }
 
+export interface BuyResaleParams {
+  eventAddress: Address;
+  tokenId: number;
+  price: string; // in wei as string
+}
+
 class Web3Service {
   private publicClient: any = null;
   private walletClient: any = null;
+  private isInitialized: boolean = false;
   private eventFactoryAddress: Address | null = null;
-  private isInitialized = false;
-
-  // Configuration
-  private readonly RPC_URL = process.env.NEXT_PUBLIC_SONIC_RPC_URL || 'https://rpc.soniclabs.com';
+  private readonly RPC_URL = process.env.NEXT_PUBLIC_SONIC_RPC_URL || 'https://rpc.testnet.soniclabs.com';
   private readonly EVENT_FACTORY_ADDRESS = process.env.NEXT_PUBLIC_EVENT_FACTORY_ADDRESS as Address;
 
   async initialize(): Promise<void> {
     try {
       // Create public client for reading blockchain data
       this.publicClient = createPublicClient({
-        chain: sonic,
+        chain: sonicTestnet,
         transport: http(this.RPC_URL)
       });
 
@@ -172,8 +100,7 @@ class Web3Service {
     }
   }
 
-  // Set wallet client (called when user connects wallet)
-  setWalletClient(walletClient: any): void {
+  setWalletClient(walletClient: any) {
     this.walletClient = walletClient;
   }
 
@@ -192,62 +119,318 @@ class Web3Service {
       throw new Error('Web3Service not initialized or wallet not connected');
     }
 
+    let transactionHash: string | null = null;
+    
     try {
       const { name, eventType, ticketPrice, eventOwner } = params;
 
+      // Debug: Log transaction parameters
+      console.log('Creating event with parameters:');
+      console.log('- EventFactory Address:', this.eventFactoryAddress);
+      console.log('- Name:', name);
+      console.log('- EventType:', eventType);
+      console.log('- TicketPrice:', ticketPrice);
+      console.log('- EventOwner:', eventOwner);
+
+      // First, let's check if the EventFactory contract is deployed and accessible
+      try {
+        const code = await this.publicClient.getBytecode({ address: this.eventFactoryAddress! });
+        if (!code || code === '0x') {
+          throw new Error(`EventFactory contract not deployed at address ${this.eventFactoryAddress}. Please contact the platform administrator to deploy the EventFactory contract first.`);
+        }
+        console.log('✅ EventFactory contract found at address:', this.eventFactoryAddress);
+        
+        // Check if we can call a view function
+        const platformOwner = await this.publicClient.readContract({
+          address: this.eventFactoryAddress!,
+          abi: EVENT_FACTORY_ABI,
+          functionName: 'platformOwner',
+        });
+        console.log('✅ EventFactory platformOwner:', platformOwner);
+      } catch (contractError) {
+        console.error('EventFactory contract check failed:', contractError);
+        if (contractError instanceof Error && contractError.message.includes('not deployed')) {
+          // Check if the address is the zero address (not configured)
+          if (this.eventFactoryAddress === '0x0000000000000000000000000000000000000000') {
+            throw new Error(`EventFactory contract address not configured. Please set NEXT_PUBLIC_EVENT_FACTORY_ADDRESS in your environment variables to the deployed EventFactory contract address.`);
+          } else {
+            throw new Error(`EventFactory contract not deployed at address ${this.eventFactoryAddress}. Please verify the contract address or contact the platform administrator.`);
+          }
+        }
+        throw new Error(`EventFactory contract check failed: ${contractError instanceof Error ? contractError.message : 'Unknown error'}`);
+      }
+
+      // Now let's estimate gas to see if there are any issues
+      try {
+        const gasEstimate = await this.publicClient.estimateContractGas({
+          address: this.eventFactoryAddress!,
+          abi: EVENT_FACTORY_ABI,
+          functionName: 'createEvent',
+          args: [name, eventType, BigInt(ticketPrice)],
+          account: eventOwner,
+        });
+        console.log('✅ Gas estimate:', gasEstimate.toString());
+      } catch (gasError) {
+        console.error('❌ Gas estimation failed:', gasError);
+        throw new Error(`Gas estimation failed: ${gasError instanceof Error ? gasError.message : 'Unknown error'}`);
+      }
+
       // Prepare transaction with optimized gas settings for Sonic testnet
-      const hash = await this.walletClient.writeContract({
+      transactionHash = await this.walletClient.writeContract({
         address: this.eventFactoryAddress!,
         abi: EVENT_FACTORY_ABI,
         functionName: 'createEvent',
         args: [name, eventType, BigInt(ticketPrice)],
         account: eventOwner,
-        gas: BigInt(3000000), // Higher gas limit for testnet
-        gasPrice: BigInt(2000000000) // 2 gwei gas price (higher for faster confirmation)
+        gas: BigInt('3000000'), // Higher gas limit for testnet
+        gasPrice: BigInt('2000000000') // 2 gwei gas price (higher for faster confirmation)
       });
 
-      // Wait for transaction confirmation with extended timeout
-      const receipt = await this.publicClient.waitForTransactionReceipt({ 
-        hash,
-        timeout: 300000, // 5 minutes timeout
-        confirmations: 1,
-        pollingInterval: 3000 // Check every 3 seconds
-      });
+      console.log('Transaction hash:', transactionHash);
+
+      // Event-based confirmation using block watchers
+      console.log('⏳ Waiting for transaction confirmation...');
+      if (!transactionHash) {
+        throw new Error('Transaction hash not available');
+      }
+      const receipt = await this.waitForTransactionConfirmation(transactionHash as `0x${string}`, 600000); // 10 minutes timeout
+      console.log('✅ Transaction confirmation received:', receipt);
       
+      // Debug: Log all receipt details
+      console.log('=== TRANSACTION RECEIPT DEBUG ===');
+      console.log('Transaction receipt:', receipt);
+      console.log('Receipt status:', receipt.status);
+      console.log('Receipt logs:', receipt.logs);
+      console.log('Number of logs:', receipt.logs.length);
+      console.log('Receipt contractAddress:', receipt.contractAddress);
+      console.log('Receipt to:', receipt.to);
+      console.log('Receipt from:', receipt.from);
+      console.log('=== END RECEIPT DEBUG ===');
+      
+      // Check if transaction was successful
+      if (receipt.status !== 'success') {
+        console.log('❌ Transaction failed with status:', receipt.status);
+        throw new Error(`Transaction failed with status: ${receipt.status}. This usually means the smart contract call reverted. Check the transaction on SonicScan: https://testnet.sonicscan.org/tx/${transactionHash}`);
+      }
+
       // Find the EventCreated event to get the new event address
-      const eventCreatedLog = receipt.logs.find((log: any) => {
+      let eventCreatedLog = null;
+      
+      console.log('=== SEARCHING FOR EVENTCREATED EVENT ===');
+      console.log('EventFactory ABI length:', EVENT_FACTORY_ABI.length);
+      console.log('Looking for EventCreated event in', receipt.logs.length, 'logs');
+      
+      try {
+        for (let i = 0; i < receipt.logs.length; i++) {
+          const log = receipt.logs[i];
+          console.log(`\n--- Log ${i} ---`);
+          console.log('Log address:', log.address);
+          console.log('Log topics:', log.topics);
+          console.log('Log data:', log.data);
+          console.log('Log data length:', log.data.length);
+          
+          try {
+            const decoded = this.publicClient.decodeEventLog({
+              abi: EVENT_FACTORY_ABI,
+              data: log.data,
+              topics: log.topics
+            });
+            console.log(`✅ Successfully decoded log ${i}:`, decoded);
+            console.log('Event name:', decoded.eventName);
+            console.log('Event args:', decoded.args);
+            
+            if (decoded.eventName === 'EventCreated') {
+              console.log('🎉 FOUND EventCreated event!', decoded);
+              eventCreatedLog = log;
+              break;
+            }
+          } catch (error) {
+            console.log(`❌ Failed to decode log ${i}:`, error);
+            console.log('Error details:', error instanceof Error ? error.message : 'Unknown error');
+          }
+        }
+      } catch (error) {
+        console.error('Error processing logs:', error);
+        throw new Error(`Failed to process transaction logs: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+      
+      console.log('=== END EVENT SEARCH ===');
+      console.log('EventCreated log found:', !!eventCreatedLog);
+
+      if (eventCreatedLog) {
+        try {
+          const decoded = this.publicClient.decodeEventLog({
+            abi: EVENT_FACTORY_ABI,
+            data: eventCreatedLog.data,
+            topics: eventCreatedLog.topics
+          });
+          console.log('Final decoded event:', decoded);
+          return decoded.args.eventAddress;
+        } catch (error) {
+          console.error('Error decoding EventCreated event:', error);
+          throw new Error(`Failed to decode EventCreated event: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      // If no EventCreated event found, log all possible events
+      console.log('=== NO EVENTCREATED EVENT FOUND ===');
+      console.log('Available events:');
+      for (let i = 0; i < receipt.logs.length; i++) {
+        const log = receipt.logs[i];
         try {
           const decoded = this.publicClient.decodeEventLog({
             abi: EVENT_FACTORY_ABI,
             data: log.data,
             topics: log.topics
           });
-          return decoded.eventName === 'EventCreated';
-        } catch {
-          return false;
+          console.log(`Event ${i}: ${decoded.eventName}`);
+        } catch (error) {
+          console.log(`Event ${i}: Could not decode`);
         }
-      });
-
-      if (eventCreatedLog) {
-        const decoded = this.publicClient.decodeEventLog({
-          abi: EVENT_FACTORY_ABI,
-          data: eventCreatedLog.data,
-          topics: eventCreatedLog.topics
-        });
-        return decoded.args.eventAddress;
       }
 
+      // Fallback: Try to get the event address from the transaction receipt
+      // The EventFactory creates a new EventImplementation contract
+      // We can try to find the contract creation in the receipt
+      console.log('=== TRYING FALLBACK METHODS ===');
+      console.log('Trying fallback method to find contract address...');
+      
+      // Check if there are any contract creations in the receipt
+      if (receipt.contractAddress) {
+        console.log('✅ Found contract address in receipt:', receipt.contractAddress);
+        return receipt.contractAddress;
+      }
+      
+      // Check logs for any contract creation events
+      console.log('Checking logs for contract creation events...');
+      for (let i = 0; i < receipt.logs.length; i++) {
+        const log = receipt.logs[i];
+        if (log.topics.length > 0) {
+          // Check if this is a contract creation log
+          console.log(`Checking log ${i} for contract creation:`, log);
+        }
+      }
+
+      console.log('=== ALL FALLBACK METHODS FAILED ===');
       throw new Error('Event creation transaction completed but event address not found');
     } catch (error) {
-      console.error('Failed to create event:', error);
+      console.error('❌ Failed to create event:', error);
+      console.error('❌ Error type:', typeof error);
+      console.error('❌ Error message:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack');
       
       // If it's a timeout error, provide more helpful information
-      if (error instanceof Error && error.message.includes('timeout')) {
-        throw new Error(`Transaction submitted but timed out waiting for confirmation. Transaction hash: ${hash}. Check the transaction status on SonicScan: https://testnet.sonicscan.org/tx/${hash}`);
+      if (error instanceof Error && (error.message.includes('timeout') || error.message.includes('Timed out'))) {
+        console.log('🕐 Timeout error detected, checking if transaction was actually confirmed...');
+        // Check if transaction is actually confirmed
+        if (transactionHash) {
+          try {
+            const receipt = await this.publicClient.getTransactionReceipt({ hash: transactionHash });
+            if (receipt) {
+              console.log('Transaction was confirmed despite timeout, processing...');
+              // Transaction is confirmed, try to find the event
+              const eventCreatedLog = receipt.logs.find((log: any) => {
+                try {
+                  const decoded = this.publicClient.decodeEventLog({
+                    abi: EVENT_FACTORY_ABI,
+                    data: log.data,
+                    topics: log.topics
+                  });
+                  return decoded.eventName === 'EventCreated';
+                } catch {
+                  return false;
+                }
+              });
+
+              if (eventCreatedLog) {
+                const decoded = this.publicClient.decodeEventLog({
+                  abi: EVENT_FACTORY_ABI,
+                  data: eventCreatedLog.data,
+                  topics: eventCreatedLog.topics
+                });
+                return decoded.args.eventAddress;
+              }
+            }
+          } catch (receiptError) {
+            console.log('Could not fetch receipt directly:', receiptError);
+          }
+          
+          throw new Error(`Transaction submitted but timed out waiting for confirmation. Transaction hash: ${transactionHash}. Check the transaction status on SonicScan: https://testnet.sonicscan.org/tx/${transactionHash}`);
+        } else {
+          throw new Error('Transaction failed and no transaction hash available');
+        }
       }
       
       throw error;
     }
+  }
+
+  // Utility method for event-based transaction confirmation
+  private async waitForTransactionConfirmation(hash: Hash, timeoutMs: number = 600000): Promise<any> {
+    console.log(`Watching for transaction confirmation: ${hash}`);
+    
+    return new Promise<any>((resolve, reject) => {
+      let timeoutId: NodeJS.Timeout;
+      let unwatch: (() => void) | null = null;
+      
+      // Set up timeout
+      timeoutId = setTimeout(() => {
+        if (unwatch) unwatch();
+        reject(new Error(`Transaction confirmation timeout after ${timeoutMs / 1000} seconds. Hash: ${hash}. Check status at: https://testnet.sonicscan.org/tx/${hash}`));
+      }, timeoutMs);
+      
+      // Watch for new blocks and check transaction status
+      unwatch = this.publicClient.watchBlockNumber({
+        onBlockNumber: async (blockNumber: bigint) => {
+          try {
+            console.log(`Checking block ${blockNumber} for transaction ${hash}`);
+            const receipt = await this.publicClient.getTransactionReceipt({ hash });
+            
+            if (receipt) {
+              console.log(`✅ Transaction confirmed in block ${blockNumber}`);
+              console.log('✅ Receipt received:', receipt);
+              console.log('✅ Transaction status:', receipt.status);
+              
+              // Check if transaction was successful
+              if (receipt.status === 'success') {
+                clearTimeout(timeoutId);
+                if (unwatch) unwatch();
+                console.log('✅ Transaction succeeded, resolving promise');
+                resolve(receipt);
+              } else {
+                console.log('❌ Transaction failed with status:', receipt.status);
+                clearTimeout(timeoutId);
+                if (unwatch) unwatch();
+                reject(new Error(`Transaction failed with status: ${receipt.status}. Check the transaction on SonicScan: https://testnet.sonicscan.org/tx/${hash}`));
+              }
+            } else {
+              console.log(`❌ No receipt found for transaction ${hash} in block ${blockNumber}`);
+            }
+          } catch (error) {
+            console.log(`Error checking block ${blockNumber}:`, error);
+            // Continue watching, don't reject on individual block check errors
+          }
+        },
+        onError: (error: Error) => {
+          console.error('Block watcher error:', error);
+          // Don't reject immediately, let timeout handle it
+        }
+      });
+      
+      // Also check immediately in case transaction is already confirmed
+      this.publicClient.getTransactionReceipt({ hash })
+        .then((immediateReceipt: any) => {
+          if (immediateReceipt) {
+            console.log('Transaction already confirmed');
+            clearTimeout(timeoutId);
+            if (unwatch) unwatch();
+            resolve(immediateReceipt);
+          }
+        })
+        .catch((error: Error) => {
+          console.log('Immediate check failed, continuing to watch blocks:', error);
+        });
+    });
   }
 
   // Event Implementation functions
@@ -263,7 +446,7 @@ class Web3Service {
       abi: EVENT_IMPLEMENTATION_ABI,
       functionName: 'buyTicket',
       args: [metadataURI],
-      value: value ? BigInt(value) : 0n
+      value: value ? BigInt(value) : BigInt('0')
     });
 
     return hash;
@@ -336,81 +519,87 @@ class Web3Service {
     return hash;
   }
 
-  // Helper function to get ticket NFT address from event
+  async cancelResale(eventAddress: Address, tokenId: number): Promise<Hash> {
+    if (!this.walletClient) {
+      throw new Error('Wallet not connected');
+    }
+
+    const ticketNFTAddress = await this.getTicketNFTAddress(eventAddress);
+
+    const hash = await this.walletClient.writeContract({
+      address: ticketNFTAddress,
+      abi: EVENT_TICKET_ABI,
+      functionName: 'cancelResale',
+      args: [BigInt(tokenId)]
+    });
+
+    return hash;
+  }
+
+  // Helper function to get ticket NFT address from event contract
   private async getTicketNFTAddress(eventAddress: Address): Promise<Address> {
-    // This would need to be implemented based on your EventImplementation contract
-    // For now, we'll assume there's a public getter for the ticketNFT address
     const ticketNFTAddress = await this.publicClient.readContract({
       address: eventAddress,
-      abi: [
-        {
-          "inputs": [],
-          "name": "ticketNFT",
-          "outputs": [
-            { "name": "", "type": "address" }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        }
-      ],
+      abi: EVENT_IMPLEMENTATION_ABI,
       functionName: 'ticketNFT'
     });
 
     return ticketNFTAddress as Address;
   }
 
-  // Utility functions for reading contract state
+  // Read functions
   async getEventInfo(eventAddress: Address) {
     const [eventName, eventType, ticketPrice] = await Promise.all([
       this.publicClient.readContract({
         address: eventAddress,
-        abi: [
-          {
-            "inputs": [],
-            "name": "eventName",
-            "outputs": [{ "name": "", "type": "string" }],
-            "stateMutability": "view",
-            "type": "function"
-          }
-        ],
+        abi: EVENT_IMPLEMENTATION_ABI,
         functionName: 'eventName'
       }),
       this.publicClient.readContract({
         address: eventAddress,
-        abi: [
-          {
-            "inputs": [],
-            "name": "eventType",
-            "outputs": [{ "name": "", "type": "uint8" }],
-            "stateMutability": "view",
-            "type": "function"
-          }
-        ],
+        abi: EVENT_IMPLEMENTATION_ABI,
         functionName: 'eventType'
       }),
       this.publicClient.readContract({
         address: eventAddress,
-        abi: [
-          {
-            "inputs": [],
-            "name": "ticketPrice",
-            "outputs": [{ "name": "", "type": "uint256" }],
-            "stateMutability": "view",
-            "type": "function"
-          }
-        ],
+        abi: EVENT_IMPLEMENTATION_ABI,
         functionName: 'ticketPrice'
       })
     ]);
 
     return {
-      eventName,
-      eventType: Number(eventType),
-      ticketPrice: eventPrice.toString()
+      name: eventName,
+      type: eventType,
+      price: ticketPrice
     };
+  }
+
+  async getTicketOwner(eventAddress: Address, tokenId: number): Promise<Address> {
+    const ticketNFTAddress = await this.getTicketNFTAddress(eventAddress);
+    
+    const owner = await this.publicClient.readContract({
+      address: ticketNFTAddress,
+      abi: EVENT_TICKET_ABI,
+      functionName: 'ownerOf',
+      args: [BigInt(tokenId)]
+    });
+
+    return owner as Address;
+  }
+
+  async getResaleInfo(eventAddress: Address, tokenId: number) {
+    const ticketNFTAddress = await this.getTicketNFTAddress(eventAddress);
+    
+    const resaleInfo = await this.publicClient.readContract({
+      address: ticketNFTAddress,
+      abi: EVENT_TICKET_ABI,
+      functionName: 'getResaleInfo',
+      args: [BigInt(tokenId)]
+    });
+
+    return resaleInfo;
   }
 }
 
 // Export singleton instance
 export const web3Service = new Web3Service();
-
