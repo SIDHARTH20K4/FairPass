@@ -32,4 +32,15 @@ export const config = getDefaultConfig({
   projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'YOUR_PROJECT_ID',
   chains: [sonicTestnet],
   ssr: true,
+  // Performance optimizations
+  batch: {
+    multicall: {
+      wait: 16, // 16ms batch delay
+    },
+  },
+  // Reduce polling frequency
+  pollingInterval: 4000, // 4 seconds instead of default 4 seconds
+  // Disable some features for better performance
+  enableNetworkSwitching: false,
+  enableAccountBalance: false,
 });

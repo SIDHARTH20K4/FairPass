@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import Organization from '../models/Organization';
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+const JWT_SECRET = process.env['JWT_SECRET'] || "your-secret-key";
 
 // Sign in
 router.post('/signin', async (req: Request, res: Response) => {

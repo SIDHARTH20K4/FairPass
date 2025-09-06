@@ -68,18 +68,49 @@ router.post('/events/:eventId/registrations', async (
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
+    console.log('🔍 Registration data received:', {
+      address: registrationData.address,
+      hasQrUrl: !!registrationData.qrUrl,
+      hasQrCid: !!registrationData.qrCid,
+      hasJsonUrl: !!registrationData.jsonUrl,
+      hasJsonCid: !!registrationData.jsonCid,
+      qrUrl: registrationData.qrUrl,
+      qrCid: registrationData.qrCid
+    });
+    
     const submission = new Submission({
       ...registrationData,
       eventId,
       status: event.approvalNeeded ? 'pending' : 'approved'
     });
     
+    console.log('🔍 Submission object before save:', {
+      qrUrl: submission.qrUrl,
+      qrCid: submission.qrCid,
+      jsonUrl: submission.jsonUrl,
+      jsonCid: submission.jsonCid
+    });
+    
     const savedSubmission = await submission.save();
+    
+    console.log('🔍 Saved submission:', {
+      qrUrl: savedSubmission.qrUrl,
+      qrCid: savedSubmission.qrCid,
+      jsonUrl: savedSubmission.jsonUrl,
+      jsonCid: savedSubmission.jsonCid
+    });
     
     const submissionResponse: SubmissionResponse = {
       ...savedSubmission.toObject(),
       id: savedSubmission._id.toString()
     };
+    
+    console.log('🔍 Response being sent to frontend:', {
+      qrUrl: submissionResponse.qrUrl,
+      qrCid: submissionResponse.qrCid,
+      jsonUrl: submissionResponse.jsonUrl,
+      jsonCid: submissionResponse.jsonCid
+    });
     
     res.status(201).json(submissionResponse);
   } catch (error) {
@@ -302,6 +333,53 @@ router.get('/events/:eventId/group', async (
   } catch (error) {
     console.error('Error fetching event group:', error);
     res.status(500).json({ error: 'Failed to fetch event group' });
+  }
+});
+
+// Validate QR code for check-in (for organizers)
+router.post('/events/:eventId/validate-qr', async (
+  req: Request<{ eventId: string }, {}, { qrData: string }>, 
+  res: Response
+) => {
+  try {
+    const { eventId } = req.params;
+    const { qrData } = req.body;
+    
+    // Verify event exists
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    
+    // Parse QR data
+    let participantData;
+    try {
+      participantData = JSON.parse(qrData);
+    } catch {
+      // If not JSON, treat as simple text
+      participantData = { data: qrData };
+    }
+    
+    // In a real implementation, you would:
+    // 1. Verify the QR code contains valid participant data
+    // 2. Check if the participant is approved for this event
+    // 3. Verify they haven't already checked in
+    // 4. Record the check-in with timestamp
+    
+    // For demo purposes, we'll simulate validation
+    const validationResult = {
+      success: true,
+      message: 'Check-in validated successfully!',
+      participantName: participantData.name || participantData.participantName || 'Unknown Participant',
+      eventName: event.name,
+      checkedInAt: new Date().toISOString(),
+      nullifierHash: `nullifier_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    };
+    
+    res.json(validationResult);
+  } catch (error) {
+    console.error('Error validating QR code:', error);
+    res.status(500).json({ error: 'QR validation failed' });
   }
 });
 

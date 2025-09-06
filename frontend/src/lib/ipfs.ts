@@ -6,9 +6,17 @@ export async function uploadImageToIPFS(input: File | string): Promise<{ cid: st
 
   let file: File;
   if (typeof input === "string") {
-    const res = await fetch(input);
-    const blob = await res.blob();
-    file = new File([blob], "image.png", { type: blob.type || "image/png" });
+    if (input.startsWith('data:')) {
+      // Handle data URL directly
+      const response = await fetch(input);
+      const blob = await response.blob();
+      file = new File([blob], "qr-code.png", { type: "image/png" });
+    } else {
+      // Handle regular URL
+      const res = await fetch(input);
+      const blob = await res.blob();
+      file = new File([blob], "image.png", { type: blob.type || "image/png" });
+    }
   } else {
     file = input;
   }

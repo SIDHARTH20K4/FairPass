@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAccount, useConnect, useDisconnect, useSignMessage, useWalletClient } from 'wagmi';
 import { injected, walletConnect } from 'wagmi/connectors';
 import { parseEther, formatEther } from 'viem';
-import { EventType, web3Service } from '@/services/Web3Service';
+import { EventType, useCreateEvent } from '../../web3/factoryConnections';
 
 export interface CreateEventParams {
   name: string;
@@ -17,6 +17,7 @@ export interface UseEventFactoryReturn {
   createEvent: (params: CreateEventParams) => Promise<string>;
   error: string | null;
   loading: boolean;
+  transactionHash: string | undefined;
 }
 
 export function useEventFactory(): UseEventFactoryReturn {
@@ -26,40 +27,39 @@ export function useEventFactory(): UseEventFactoryReturn {
   const { signMessageAsync } = useSignMessage();
   const { data: walletClient } = useWalletClient();
   
+  // Use wagmi hooks for contract interaction
+  const { createEvent: createEventContract, hash, isPending, error: contractError } = useCreateEvent();
+  
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [eventAddress, setEventAddress] = useState<string | null>(null);
 
-  // Initialize Web3 service
+  // Initialize - no need for complex initialization with wagmi
   useEffect(() => {
-    const init = async () => {
-      try {
-        await web3Service.initialize();
-        setIsInitialized(true);
-      } catch (err) {
-        console.error('Failed to initialize Web3 service:', err);
-        setError('Failed to initialize Web3 service');
-      }
-    };
-
-    init();
+    setIsInitialized(true);
   }, []);
-
-  // Set wallet client when available
-  useEffect(() => {
-    if (walletClient) {
-      web3Service.setWalletClient(walletClient);
-    }
-  }, [walletClient]);
 
   // Update error state when connection error changes
   useEffect(() => {
     if (connectError) {
       setError(connectError.message);
+    } else if (contractError) {
+      setError(contractError.message);
     } else {
       setError(null);
     }
-  }, [connectError]);
+  }, [connectError, contractError]);
+
+  // Watch for transaction hash changes to track loading state
+  useEffect(() => {
+    console.log('🔍 useWeb3 hash useEffect triggered:', { hash, isPending, loading });
+    if (hash) {
+      console.log('✅ Transaction hash updated in useWeb3:', hash);
+      setLoading(true);
+      setEventAddress(null);
+    }
+  }, [hash, isPending, loading]);
 
   const createEvent = useCallback(async (params: CreateEventParams): Promise<string> => {
     if (!isConnected || !address) {
@@ -70,25 +70,31 @@ export function useEventFactory(): UseEventFactoryReturn {
       throw new Error('Web3 service not initialized');
     }
 
+    if (isPending) {
+      throw new Error('Transaction already in progress');
+    }
+
     setLoading(true);
     setError(null);
+    setEventAddress(null);
 
     try {
-      const eventAddress = await web3Service.createEvent({
-        name: params.name,
-        eventType: params.eventType,
-        ticketPrice: params.ticketPrice
-      });
-
-      return eventAddress;
+      // Convert ticketPrice from string to BigInt
+      const ticketPriceBigInt = BigInt(params.ticketPrice);
+      
+      // Call the wagmi hook - this will trigger the transaction
+      await createEventContract(params.name, params.eventType, ticketPriceBigInt);
+      
+      // Return a placeholder - the actual hash will be available in the hash state
+      // The UI will update when the hash becomes available
+      return 'Transaction submitted';
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create event';
       setError(errorMessage);
-      throw err;
-    } finally {
       setLoading(false);
+      throw err;
     }
-  }, [isConnected, address, isInitialized]);
+  }, [isConnected, address, isInitialized, createEventContract, isPending]);
 
   return {
     isInitialized,
@@ -96,7 +102,8 @@ export function useEventFactory(): UseEventFactoryReturn {
     address,
     createEvent,
     error,
-    loading
+    loading: loading || isPending,
+    transactionHash: hash
   };
 }
 

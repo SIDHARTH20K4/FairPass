@@ -12,7 +12,7 @@ import organizationRoutes from './routes/organizations';
 import authRoutes from './routes/auth';
 
 // Load environment variables
-dotenv.config({ path: '../config.env' });
+dotenv.config();
 
 const app = express();
 const PORT = process.env["PORT"] || 4000;

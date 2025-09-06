@@ -4,8 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
-import { apiGetOrganizationEvents, apiUpdateEventStatus, apiGetEventsRegistrationCounts } from "@/lib/api";
+import { apiGetOrganizationEvents, apiUpdateEventStatus, apiGetEventsRegistrationCounts, apiUpdateEvent } from "@/lib/api";
 import MobileSidebar from "@/components/MobileSidebar";
+import { useEventFactory } from "@/hooks/useWeb3";
+import { EventType } from "../../../../web3/factoryConnections";
+import { parseEther } from "viem";
+import TransactionStatus from "@/components/TransactionStatus";
 
 type HostEvent = {
   id: string;
@@ -16,12 +20,20 @@ type HostEvent = {
   eventDescription?: string;
   organization?: string;
   organizationDescription?: string;
-  approvalNeeded?: boolean; // Added for approval status
+  approvalNeeded?: boolean;
+  isPaid?: boolean;
+  price?: number;
+  blockchainEventAddress?: string | null;
+  useBlockchain?: boolean;
 };
 
 export default function HostDashboardPage() {
   const router = useRouter();
   const { organization, isAuthenticated, loading: authLoading, signOut } = useAuth();
+  
+  // Web3 integration
+  const { isInitialized, isConnected, address, createEvent, error: web3Error, transactionHash } = useEventFactory();
+  
   const [events, setEvents] = useState<HostEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
@@ -31,6 +43,18 @@ export default function HostDashboardPage() {
   const [participantCounts, setParticipantCounts] = useState<Record<string, number>>({});
   const [loadingCounts, setLoadingCounts] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // Publishing state
+  const [publishingEvent, setPublishingEvent] = useState<string | null>(null);
+  const [localTransactionHash, setLocalTransactionHash] = useState<string | null>(null);
+  const [blockchainEventAddress, setBlockchainEventAddress] = useState<string | null>(null);
+  const [publishedEventDetails, setPublishedEventDetails] = useState<{
+    eventId: string;
+    eventName: string;
+    contractAddress: string;
+    transactionHash: string;
+  } | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && isAuthenticated && organization) {
@@ -42,6 +66,15 @@ export default function HostDashboardPage() {
     }
   }, [authLoading, isAuthenticated, organization, router]);
 
+  // Watch for transaction hash updates
+  useEffect(() => {
+    console.log('🔍 Dashboard transaction hash useEffect triggered:', { transactionHash, publishingEvent, localTransactionHash });
+    if (transactionHash && !localTransactionHash && publishingEvent) {
+      setLocalTransactionHash(transactionHash);
+      console.log('✅ Transaction hash received and set in dashboard:', transactionHash);
+    }
+  }, [transactionHash, publishingEvent, localTransactionHash]);
+
   async function loadEvents() {
     if (!organization?.address) {
       return;
@@ -49,7 +82,14 @@ export default function HostDashboardPage() {
     
     try {
       setLoading(true);
+      console.log('🔄 Loading events for organization:', organization.address);
       const eventsData = await apiGetOrganizationEvents(organization.address);
+      console.log('📋 Loaded events data:', eventsData.map(e => ({
+        id: e.id,
+        name: e.name,
+        blockchainEventAddress: e.blockchainEventAddress,
+        status: e.status
+      })));
       setEvents(eventsData);
       
       // Fetch participant counts for all events
@@ -83,6 +123,159 @@ export default function HostDashboardPage() {
       setParticipantCounts(defaultCounts);
     } finally {
       setLoadingCounts(false);
+    }
+  }
+
+  async function publishEvent(event: HostEvent) {
+    if (!isConnected || !isInitialized) {
+      console.error('Please connect your wallet to publish events');
+      return;
+    }
+
+    if (publishingEvent) {
+      console.log('Already publishing an event, please wait');
+      return;
+    }
+
+    try {
+      setPublishingEvent(event.id);
+      setLocalTransactionHash(null);
+      setBlockchainEventAddress(null);
+
+      // Determine event type based on event data
+      let eventType: EventType;
+      if (event.approvalNeeded) {
+        eventType = EventType.APPROVAL;
+      } else if (event.isPaid && event.price) {
+        eventType = EventType.PAID;
+      } else {
+        eventType = EventType.FREE;
+      }
+
+      // Convert price to wei if paid event
+      const ticketPrice = event.isPaid && event.price ? parseEther(event.price.toString()).toString() : "0";
+
+      console.log('Publishing event with params:', { 
+        name: event.name, 
+        eventType, 
+        ticketPrice 
+      });
+
+      // Create event on blockchain
+      const transactionResult = await createEvent({
+        name: event.name,
+        eventType,
+        ticketPrice
+      });
+
+      console.log('Transaction submitted:', transactionResult);
+      
+      // Wait for transaction hash
+      if (transactionHash) {
+        setLocalTransactionHash(transactionHash);
+        console.log('✅ Transaction hash received immediately:', transactionHash);
+      } else {
+        console.log('⏳ Transaction hash not available yet, will be set by useEffect');
+      }
+
+    } catch (error) {
+      console.error('Failed to publish event:', error);
+      setPublishingEvent(null);
+    }
+  }
+
+  function handleTransactionSuccess(receipt: any) {
+    console.log('✅ Transaction confirmed! Receipt:', receipt);
+    console.log('Contract address from receipt:', receipt.contractAddress);
+    
+    if (receipt.contractAddress) {
+      setBlockchainEventAddress(receipt.contractAddress);
+      console.log('✅ Contract address set to:', receipt.contractAddress);
+      
+      // Store published event details for UI display
+      if (publishingEvent && localTransactionHash) {
+        const publishedEvent = events.find(e => e.id === publishingEvent);
+        if (publishedEvent) {
+          setPublishedEventDetails({
+            eventId: publishingEvent,
+            eventName: publishedEvent.name,
+            contractAddress: receipt.contractAddress,
+            transactionHash: localTransactionHash
+          });
+        }
+      }
+      
+      // Update the event in the database
+      if (publishingEvent) {
+        updateEventWithBlockchainAddress(publishingEvent, receipt.contractAddress);
+      }
+    } else {
+      console.warn('⚠️ No contract address found in receipt');
+      setBlockchainEventAddress('confirmed');
+      console.log('🔄 Set blockchainEventAddress to confirmed as fallback');
+    }
+    
+    // Reset publishing state
+    setPublishingEvent(null);
+    setLocalTransactionHash(null);
+    setBlockchainEventAddress(null);
+  }
+
+  function handleTransactionError(error: any) {
+    console.error('❌ Deployment failed:', error);
+    setPublishingEvent(null);
+    setLocalTransactionHash(null);
+    setBlockchainEventAddress(null);
+  }
+
+  function clearPublishedEventDetails() {
+    setPublishedEventDetails(null);
+  }
+
+  function showToast(message: string) {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(null), 3000);
+  }
+
+  function copyToClipboard(text: string, label: string) {
+    navigator.clipboard.writeText(text);
+    showToast(`${label} copied to clipboard!`);
+  }
+
+  async function updateEventWithBlockchainAddress(eventId: string, contractAddress: string) {
+    try {
+      console.log('🔄 Updating event with blockchain address:', { eventId, contractAddress });
+      
+      const updateData = {
+        blockchainEventAddress: contractAddress,
+        useBlockchain: true,
+        status: 'published'
+      };
+      
+      console.log('📤 Sending API update with data:', updateData);
+      
+      const updatedEvent = await apiUpdateEvent(eventId, updateData);
+      
+      console.log('✅ API update successful, received updated event:', updatedEvent);
+      console.log('🔄 Reloading events...');
+      
+      // Reload events to reflect the changes
+      await loadEvents();
+      
+      // Small delay to ensure state is updated
+      setTimeout(() => {
+        const updatedEvent = events.find(e => e.id === eventId);
+        console.log('🔍 Event after reload (delayed check):', updatedEvent ? {
+          id: updatedEvent.id,
+          name: updatedEvent.name,
+          blockchainEventAddress: updatedEvent.blockchainEventAddress,
+          status: updatedEvent.status
+        } : 'Event not found');
+      }, 100);
+      
+      console.log('✅ Event updated with blockchain address:', contractAddress);
+    } catch (error) {
+      console.error('❌ Failed to update event with blockchain address:', error);
     }
   }
 
@@ -127,7 +320,7 @@ export default function HostDashboardPage() {
     }
   }
 
-  function createEvent() {
+  function navigateToCreateEvent() {
     router.push('/host/create');
   }
 
@@ -199,7 +392,8 @@ export default function HostDashboardPage() {
             <span>QR Scanner</span>
           </Link>
 
-          <button onClick={createEvent} className="btn-primary flex items-center gap-2 px-3 py-2 min-w-[120px]">
+
+          <button onClick={navigateToCreateEvent} className="btn-primary flex items-center gap-2 px-3 py-2 min-w-[120px]">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
@@ -309,6 +503,89 @@ export default function HostDashboardPage() {
         )}
       </div>
 
+      {/* Blockchain Integration Section */}
+      <div className="mb-8 card p-6 fade-in">
+        <h2 className="text-xl font-semibold mb-6 text-foreground">Blockchain Integration</h2>
+        <div className="space-y-4">
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">Smart Contract Features</h4>
+                <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
+                  Enable blockchain features for your events to get NFT tickets, resale marketplace, and secure ownership verification.
+                </p>
+                <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                  <li>• NFT tickets with unique metadata</li>
+                  <li>• Resale marketplace (up to 3 times)</li>
+                  <li>• Platform fee: 1% on resales</li>
+                  <li>• Secure ownership verification</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          
+          {!isConnected ? (
+            <div className="text-center py-6">
+              <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <p className="text-foreground/70 mb-4">Connect your wallet to enable blockchain features</p>
+              <button className="btn-primary">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                Connect Wallet
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="font-medium text-foreground">Wallet Connected</span>
+                </div>
+                <div className="text-xs text-foreground/60 font-mono bg-foreground/5 px-2 py-1 rounded">
+                  {address?.slice(0, 6)}...{address?.slice(-4)}
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {isInitialized ? (
+                    <>
+                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                      <span className="font-medium text-foreground">EventFactory Ready</span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
+                      <span className="font-medium text-foreground">Initializing...</span>
+                    </>
+                  )}
+                </div>
+              </div>
+              
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="font-medium text-green-900 dark:text-green-100">Ready to Publish Events</span>
+                </div>
+                <p className="text-sm text-green-800 dark:text-green-200">
+                  You can now publish your draft events to deploy them as smart contracts on the blockchain.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Events Summary Section */}
       {events.length > 0 && (
         <div className="mb-8 card p-6 fade-in">
@@ -379,7 +656,7 @@ export default function HostDashboardPage() {
           </div>
           <h3 className="text-xl font-semibold text-foreground mb-2">No events yet</h3>
           <p className="text-foreground/60 mb-6">Create your first event to get started</p>
-          <button onClick={createEvent} className="btn-primary">
+          <button onClick={navigateToCreateEvent} className="btn-primary">
             Create your first event
           </button>
         </div>
@@ -421,18 +698,59 @@ export default function HostDashboardPage() {
                             <span>{participantCounts[e.id] || 0} participants</span>
                           )}
                         </div>
+                        
+                        {/* Contract Address */}
+                        {e.blockchainEventAddress ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span className="text-xs font-medium">Contract Deployed</span>
+                            </div>
+                            <div className="bg-foreground/5 rounded-lg p-3 border border-foreground/10">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs text-foreground/70 font-medium">Contract Address:</span>
+                                <button
+                                  onClick={() => copyToClipboard(e.blockchainEventAddress!, 'Contract address')}
+                                  className="text-foreground/60 hover:text-foreground transition-colors"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                  </svg>
+                                </button>
+                              </div>
+                              <p className="font-mono text-xs text-foreground break-all">
+                                {e.blockchainEventAddress}
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                            <span className="text-xs">Not deployed to blockchain</span>
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-3 ml-6">
                         <span className="px-3 py-1 rounded-full text-xs font-medium glass border border-foreground/10">
                           Draft
                         </span>
-                        <button 
-                          onClick={() => updateEventStatus(e.id, 'published')}
-                          disabled={updatingStatus === e.id}
-                          className="btn-primary text-sm px-4 py-2"
-                        >
-                          {updatingStatus === e.id ? 'Publishing...' : 'Publish'}
-                        </button>
+                        {!isConnected ? (
+                          <div className="text-sm text-orange-600 dark:text-orange-400">
+                            Connect wallet to publish
+                          </div>
+                        ) : (
+                          <button 
+                            onClick={() => publishEvent(e)}
+                            disabled={publishingEvent === e.id || !isConnected}
+                            className="btn-primary text-sm px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {publishingEvent === e.id ? 'Publishing...' : 'Publish'}
+                          </button>
+                        )}
                       </div>
                     </div>
                     
@@ -465,6 +783,113 @@ export default function HostDashboardPage() {
             )}
           </div>
 
+          {/* Transaction Status for Publishing */}
+          {publishingEvent && localTransactionHash && (
+            <div className="mb-8 card p-6 fade-in">
+              <h2 className="text-xl font-semibold mb-4 text-foreground">Publishing Event</h2>
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <TransactionStatus 
+                  hash={localTransactionHash}
+                  onSuccess={handleTransactionSuccess}
+                  onError={handleTransactionError}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Published Event Success Banner */}
+          {publishedEventDetails && (
+            <div className="mb-8 card p-6 fade-in bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center bg-green-500">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-green-900 dark:text-green-100">
+                      Event Published Successfully!
+                    </h2>
+                    <p className="text-sm text-green-700 dark:text-green-300">
+                      Your event "{publishedEventDetails.eventName}" has been deployed to the blockchain.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={clearPublishedEventDetails}
+                  className="text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                {/* Contract Address */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-green-200 dark:border-green-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-medium text-green-900 dark:text-green-100">Contract Address</h3>
+                    <button
+                      onClick={() => copyToClipboard(publishedEventDetails.contractAddress, 'Contract address')}
+                      className="text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </button>
+                  </div>
+                  <p className="font-mono text-sm text-green-800 dark:text-green-200 break-all">
+                    {publishedEventDetails.contractAddress}
+                  </p>
+                </div>
+
+                {/* Transaction Hash */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-green-200 dark:border-green-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-medium text-green-900 dark:text-green-100">Transaction Hash</h3>
+                    <button
+                      onClick={() => copyToClipboard(publishedEventDetails.transactionHash, 'Transaction hash')}
+                      className="text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </button>
+                  </div>
+                  <p className="font-mono text-sm text-green-800 dark:text-green-200 break-all">
+                    {publishedEventDetails.transactionHash}
+                  </p>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      window.open(`https://testnet.soniclabs.com/tx/${publishedEventDetails.transactionHash}`, '_blank');
+                    }}
+                    className="btn-primary text-sm px-4 py-2"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    View on Explorer
+                  </button>
+                  <button
+                    onClick={clearPublishedEventDetails}
+                    className="btn-secondary text-sm px-4 py-2"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Published Events Section */}
           <div className="fade-in">
             <h2 className="text-xl font-semibold mb-6 text-foreground flex items-center gap-3">
@@ -492,6 +917,41 @@ export default function HostDashboardPage() {
                             <span>{participantCounts[e.id] || 0} participants</span>
                           )}
                         </div>
+                        
+                        {/* Contract Address */}
+                        {e.blockchainEventAddress ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span className="text-xs font-medium">Contract Deployed</span>
+                            </div>
+                            <div className="bg-foreground/5 rounded-lg p-3 border border-foreground/10">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs text-foreground/70 font-medium">Contract Address:</span>
+                                <button
+                                  onClick={() => copyToClipboard(e.blockchainEventAddress!, 'Contract address')}
+                                  className="text-foreground/60 hover:text-foreground transition-colors"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                  </svg>
+                                </button>
+                              </div>
+                              <p className="font-mono text-xs text-foreground break-all">
+                                {e.blockchainEventAddress}
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                            <span className="text-xs">Not deployed to blockchain</span>
+                          </div>
+                        )}
               </div>
                       <div className="flex items-center gap-3 ml-6">
                         <span className="px-3 py-1 rounded-full text-xs font-medium glass border border-foreground/10">
@@ -521,6 +981,18 @@ export default function HostDashboardPage() {
           ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 fade-in">
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <span className="text-sm font-medium">{toastMessage}</span>
           </div>
         </div>
       )}

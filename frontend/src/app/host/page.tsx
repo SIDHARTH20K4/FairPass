@@ -95,7 +95,7 @@ export default function HostPage() {
   const [bannerDataUrl, setBannerDataUrl] = useState("");
   const [isPaid, setIsPaid] = useState(false);
   const [price, setPrice] = useState<string>("");
-  const [currency, setCurrency] = useState<string>("USD");
+  const [currency, setCurrency] = useState<string>("SONIC");
   const [approvalNeeded, setApprovalNeeded] = useState(false);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");

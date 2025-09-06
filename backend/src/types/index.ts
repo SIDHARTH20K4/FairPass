@@ -20,6 +20,8 @@ export interface IEvent extends Document {
   lng?: number;
   hostAddress: string;
   status: 'draft' | 'published';
+  blockchainEventAddress?: string | null;
+  useBlockchain?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -68,6 +70,10 @@ export interface CreateSubmissionRequest {
   signature: string;
   commitment?: string;
   semaphoreIdentity?: string; // Serialized Semaphore identity (encrypted)
+  qrCid?: string;
+  qrUrl?: string;
+  jsonCid?: string;
+  jsonUrl?: string;
 }
 
 export interface UpdateSubmissionRequest {

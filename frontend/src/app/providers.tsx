@@ -6,14 +6,28 @@ import { WagmiProvider } from "wagmi";
 import { RainbowKitProvider } from "@rainbow-me/rainbowkit";
 import { config } from "./config";
 import { AuthProvider } from "@/hooks/useAuth";
-
-const queryClient = new QueryClient();
+import { useState } from "react";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
+  // Create QueryClient only once to prevent recreation on every render
+  const [queryClient] = useState(() => new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 1000 * 60 * 5, // 5 minutes
+        gcTime: 1000 * 60 * 10, // 10 minutes (formerly cacheTime)
+        retry: 1,
+        refetchOnWindowFocus: false,
+      },
+    },
+  }));
+
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider>
+        <RainbowKitProvider
+          modalSize="compact"
+          showRecentTransactions={false}
+        >
           <AuthProvider>
             {children}
           </AuthProvider>

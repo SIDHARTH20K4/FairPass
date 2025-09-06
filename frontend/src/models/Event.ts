@@ -41,6 +41,8 @@ const EventSchema = new Schema<EventDoc>(
     lng: Number,
     hostAddress: String,
     status: { type: String, enum: ['draft', 'published'], default: 'draft' },
+    blockchainEventAddress: { type: String, default: null },
+    useBlockchain: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

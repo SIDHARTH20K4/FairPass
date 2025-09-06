@@ -27,7 +27,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
   const [bannerDataUrl, setBannerDataUrl] = useState<string>("");
   const [isPaid, setIsPaid] = useState(false);
   const [price, setPrice] = useState<string>("");
-  const [currency, setCurrency] = useState<string>("USD");
+  const [currency, setCurrency] = useState<string>("SONIC");
   const [approvalNeeded, setApprovalNeeded] = useState(false);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
@@ -44,7 +44,7 @@ export default function EditEventPage({ params }: { params: Promise<{ id: string
     setName(event.name || "");
     setIsPaid(!!event.isPaid);
     setPrice(event.price != null ? String(event.price) : "");
-    setCurrency(event.currency || "USD");
+    setCurrency(event.currency || "SONIC");
     setApprovalNeeded(!!event.approvalNeeded);
     setDate(event.date || "");
     setTime(event.time || "");

@@ -68,6 +68,14 @@ const EventSchema = new Schema<IEvent>({
     type: String,
     enum: ['draft', 'published'],
     default: 'draft'
+  },
+  blockchainEventAddress: {
+    type: String,
+    default: null
+  },
+  useBlockchain: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

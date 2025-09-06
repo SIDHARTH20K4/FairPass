@@ -82,7 +82,7 @@ export default function EventTimeline({ events }: { events: EventItem[] }) {
                           <div className="text-sm text-foreground/60 font-medium">{formatTime(e.time)}</div>
                           {e.isPaid && e.price !== undefined && (
                             <span className="text-xs font-semibold px-3 py-1 rounded-full glass border border-foreground/10">
-                              {e.currency || "USD"} {e.price}
+                              {e.currency || "SONIC"} {e.price}
                             </span>
                           )}
                         </div>

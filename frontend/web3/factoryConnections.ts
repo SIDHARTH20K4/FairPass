@@ -1,6 +1,13 @@
 import { useReadContract, useWriteContract } from "wagmi";
 import { eventFactoryAddress, eventFactoryABI } from "./constants";
 
+// EventType enum values matching the smart contract
+export enum EventType {
+  FREE = 0,
+  PAID = 1,
+  APPROVAL = 2
+}
+
 // --------------------
 // Readable Operations
 // --------------------
@@ -42,15 +49,42 @@ export const useCreateEvent = () => {
 
   const createEvent = (
     name: string,
-    eventType: number, // 0 = FREE, 1 = PAID, 2 = APPROVAL
+    eventType: EventType, // EventType enum (0 = FREE, 1 = PAID, 2 = APPROVAL)
     ticketPrice: bigint
   ) => {
+    // Validate parameters before calling
+    if (!name || name.trim() === '') {
+      throw new Error('Event name cannot be empty');
+    }
+    
+    if (ticketPrice < BigInt(0)) {
+      throw new Error('Ticket price cannot be negative');
+    }
+
+    console.log('Creating event with parameters:', {
+      name,
+      eventType,
+      ticketPrice: ticketPrice.toString(),
+      eventTypeType: typeof eventType,
+      ticketPriceType: typeof ticketPrice
+    });
+
+    console.log('🔍 Calling writeContract with:', {
+      address: eventFactoryAddress,
+      functionName: "createEvent",
+      args: [name, eventType, ticketPrice],
+      isPending,
+      hash
+    });
+
     writeContract({
       address: eventFactoryAddress,
       abi: eventFactoryABI,
       functionName: "createEvent",
       args: [name, eventType, ticketPrice],
     });
+
+    console.log('🔍 writeContract called, current state:', { isPending, hash });
   };
 
   return { createEvent, hash, isPending, error };

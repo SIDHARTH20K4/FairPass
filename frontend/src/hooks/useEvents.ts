@@ -15,7 +15,7 @@ export type EventItem = {
   bannerCid?: string; // optional raw CID
   isPaid: boolean;
   price?: number;
-  currency?: string; // e.g., USD, INR, THB
+  currency?: string; // e.g., SONIC
   approvalNeeded: boolean;
   date: string; // YYYY-MM-DD
   time: string; // HH:mm
@@ -27,6 +27,7 @@ export type EventItem = {
   lng?: number;
   formSchema?: FormField[];
   hostAddress?: string; // organizer wallet address (lowercased)
+  blockchainEventAddress?: string | null; // deployed contract address
   createdAt: number;
 };
 
