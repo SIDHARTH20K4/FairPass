@@ -1,7 +1,5 @@
 // Centralized API configuration
-export const API_CONFIG = {
-  BASE_URL: process.env.NEXT_PUBLIC_API_URL || '
-https://fairpass.onrender.com/api',
+export const API_CONFIG = {BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'https://fairpass.onrender.com/api',
   
   // API endpoints
   ENDPOINTS: {
