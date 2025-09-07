@@ -132,7 +132,7 @@ router.post('/events/:eventId/registrations', async (
     
     const submissionResponse: SubmissionResponse = {
       ...savedSubmission.toObject(),
-      id: savedSubmission._id.toString()
+      id: (savedSubmission._id as any).toString()
     };
     
     console.log('🔍 Response being sent to frontend:', {
@@ -451,7 +451,7 @@ router.get('/events/:eventId/group/members', async (
     
     const members = approvedSubmissions.map(submission => ({
       commitment: submission.commitment,
-      name: submission.values?.name || 'Anonymous',
+      name: submission.values?.['name'] || 'Anonymous',
       address: submission.address,
       approvedAt: submission.createdAt
     }));
