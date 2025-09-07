@@ -101,10 +101,21 @@ app.use(notFound);
 app.use(errorHandler);
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`🚀 FairPass Backend running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔗 API Base: http://localhost:${PORT}/api`);
+const HOST = process.env['HOST'] || '0.0.0.0';
+const server = app.listen(PORT, HOST, () => {
+  console.log(`🚀 FairPass Backend running on ${HOST}:${PORT}`);
+  console.log(`📊 Health check: http://${HOST}:${PORT}/health`);
+  console.log(`🔗 API Base: http://${HOST}:${PORT}/api`);
+  console.log(`🌍 Environment: ${process.env['NODE_ENV'] || 'development'}`);
+});
+
+// Handle server errors
+server.on('error', (error: any) => {
+  console.error('❌ Server error:', error);
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use`);
+  }
+  process.exit(1);
 });
 
 // Graceful shutdown
