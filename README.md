@@ -35,14 +35,6 @@ Tickets are NFTs with on-chain ownership, reselling controls, and automatic burn
 ---
 
 ## 🔗 Smart Contract
-**EventFactory.sol CA:** 0x9016F1b7DA5C91d6479aAF99A8765Cb4ED0668bE  
-Main Functions:  
-- `buyTicket()` → Mint new ticket  
-- `checkIn()` → Burn ticket after entry  
-- `mintForUser()` → Organizer batch minting  
-- `ownerOfNFT()` → Verify ticket ownership  
-
-## 🔗 Smart Contract
 ---
 
 ## 🏗️ EventImplementation.sol
@@ -73,6 +65,8 @@ ERC-721 NFT contract for ticket representation.
 
 ## 🌐 EventFactory.sol
 Manages multiple events and revenue logic.
+
+**EventFactory.sol CA:** 0x9016F1b7DA5C91d6479aAF99A8765Cb4ED0668bE  
 
 ### 🔑 Core Functionalities
 - **createEvent(...)** → Deploys a new `EventImplementation` contract for each event.  
