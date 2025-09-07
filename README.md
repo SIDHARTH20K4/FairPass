@@ -35,8 +35,6 @@ Tickets are NFTs with on-chain ownership, reselling controls, and automatic burn
 ---
 
 ## 🔗 Smart Contract
----
-
 ## 🏗️ EventImplementation.sol
 Main contract for event logic.
 
@@ -89,7 +87,7 @@ Manages multiple events and revenue logic.
 ---
 
 ## 🧩 Example Flow
-1. Organizer creates event via **PlatformManager**.  
+1. Organizer creates event via **EventFactory**.  
 2. Users buy tickets using **EventImplementation**.  
 3. NFTs minted by **EventTicket** contract.  
 4. At venue, user calls **checkIn** → NFT is burned.  
