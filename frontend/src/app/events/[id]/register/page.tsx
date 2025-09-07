@@ -89,8 +89,8 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
   const eventHooks = contractAddress ? createEventHooks(contractAddress) : null;
   
   // Payment hooks (must be declared before useWaitForTransactionReceipt)
-  const { buyTicket, hash: buyTicketHash, isPending: isBuyTicketPending, error: buyTicketError } = useBuyTicket(contractAddress || '');
-  const { mintForUser, isPending: isMintForUserPending, error: mintForUserError } = useMintForUser(contractAddress || '');
+  const { buyTicket, hash: buyTicketHash, isPending: isBuyTicketPending || isMintForUserPending, error: buyTicketError } = useBuyTicket(contractAddress || '');
+  const { mintForUser, hash: mintForUserHash, isPending: isMintForUserPending, error: mintForUserError } = useMintForUser(contractAddress || '');
   
   // NFT contract address hook
   const { data: ticketNFTAddress } = useTicketNFT(contractAddress || '');
@@ -116,7 +116,7 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
     }
   });
   const { isLoading: isNFTConfirming, isSuccess: isNFTCreated } = useWaitForTransactionReceipt({
-    hash: nftTxHash,
+    hash: nftTxHash || mintForUserHash,
   });
 
   // Load event data
@@ -236,34 +236,8 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
     }
   }, [isNFTCreated, nftTxHash, nftContractAddress]);
 
-  // Auto-redirect after successful NFT creation
-  useEffect(() => {
-    if (nftCreated && event?.blockchainEventAddress) {
-      // Start countdown
-      setRedirectCountdown(5);
-      
-      // Auto-redirect after 5 seconds
-      const timer = setTimeout(() => {
-        router.push(`/events/${id}`);
-      }, 5000);
-      
-      // Countdown timer
-      const countdownTimer = setInterval(() => {
-        setRedirectCountdown(prev => {
-          if (prev === null || prev <= 1) {
-            clearInterval(countdownTimer);
-            return null;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      
-      return () => {
-        clearTimeout(timer);
-        clearInterval(countdownTimer);
-      };
-    }
-  }, [nftCreated, event?.blockchainEventAddress, router, id]);
+  // No auto-redirect for free events after NFT minting
+  // Users can manually navigate using the "Go to Event Page" button
 
   // Load existing registration from backend on mount
   useEffect(() => {
@@ -380,6 +354,14 @@ https://fairpass.onrender.com/api
     }
   }, [buyTicketError]);
 
+  // Watch for mintForUser error
+  useEffect(() => {
+    if (mintForUserError) {
+      console.error('❌ Mint for user error:', mintForUserError);
+      setNftError(mintForUserError.message || 'NFT minting failed');
+    }
+  }, [mintForUserError]);
+
   // Watch for buyTicket transaction hash
   useEffect(() => {
     if (buyTicketHash) {
@@ -387,6 +369,14 @@ https://fairpass.onrender.com/api
       setPaymentHash(buyTicketHash);
     }
   }, [buyTicketHash]);
+
+  // Watch for mintForUser transaction hash
+  useEffect(() => {
+    if (mintForUserHash) {
+      console.log('✅ Mint for user transaction submitted:', mintForUserHash);
+      setNftTxHash(mintForUserHash);
+    }
+  }, [mintForUserHash]);
 
   // Debug payment state changes
   useEffect(() => {
@@ -493,7 +483,7 @@ https://fairpass.onrender.com/api
       return;
     }
 
-    if (isNFTMinting || isBuyTicketPending) {
+    if (isNFTMinting || isBuyTicketPending || isMintForUserPending || isMintForUserPending) {
       console.log('NFT minting already in progress');
       return;
     }
@@ -579,12 +569,20 @@ https://fairpass.onrender.com/api
       console.log('🔗 Metadata URL:', metadataURI);
       console.log('🖼️ QR Image URL:', qrImageUpload.url);
 
-      // Mint the NFT using the dynamic buyTicket hook
-      // This handles both FREE and PAID events automatically
-      console.log('🎨 Minting NFT via dynamic buyTicket hook...');
-      
-      const priceInWei = event.price ? parseEther(event.price.toString()) : BigInt(0);
-      buyTicket(metadataURI, priceInWei);
+      // Mint the NFT using the appropriate function based on event type
+      if (event.isPaid && event.price) {
+        // For paid events, use buyTicket with payment
+        console.log('🎨 Minting paid NFT via buyTicket hook...');
+        const priceInWei = parseEther(event.price.toString());
+        buyTicket(metadataURI, priceInWei);
+      } else {
+        // For free events, use mintForUser without payment
+        console.log('🎨 Minting free NFT via mintForUser hook...');
+        if (!address) {
+          throw new Error('Wallet address required for minting');
+        }
+        mintForUser(address, metadataURI);
+      }
 
       console.log('✅ NFT minting transaction submitted via dynamic hook');
       // Don't set nftCreated here - wait for transaction confirmation
@@ -1023,10 +1021,10 @@ https://fairpass.onrender.com/api
                 </button>
                 <button 
                   onClick={handlePayment}
-                  disabled={isPaymentPending || isDirectPaymentPending || isBuyTicketPending}
+                  disabled={isPaymentPending || isDirectPaymentPending || isBuyTicketPending || isMintForUserPending}
                   className="btn-primary flex-1"
                 >
-                  {(isPaymentPending || isDirectPaymentPending || isBuyTicketPending) ? (
+                  {(isPaymentPending || isDirectPaymentPending || isBuyTicketPending || isMintForUserPending) ? (
                     <>
                       <div className="w-4 h-4 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin mr-2"></div>
                       Processing Payment...
@@ -1076,7 +1074,7 @@ https://fairpass.onrender.com/api
                 </div>
                 
                 {/* Mint NFT Button for Paid Events */}
-                {!nftCreated && !nftCreating && !isNFTMinting && !isBuyTicketPending && (
+                {!nftCreated && !nftCreating && !isNFTMinting && !isBuyTicketPending || isMintForUserPending && !isMintForUserPending && (
                   <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                     <div className="text-center">
                       <p className="text-sm text-blue-600 dark:text-blue-400 mb-3">
@@ -1084,10 +1082,10 @@ https://fairpass.onrender.com/api
                       </p>
                       <button
                         onClick={createNFTTicket}
-                        disabled={nftCreating || isNFTMinting || isBuyTicketPending}
+                        disabled={nftCreating || isNFTMinting || isBuyTicketPending || isMintForUserPending}
                         className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {nftCreating || isNFTMinting || isBuyTicketPending ? (
+                        {nftCreating || isNFTMinting || isBuyTicketPending || isMintForUserPending ? (
                           <div className="flex items-center gap-2">
                             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                             Creating NFT...
@@ -1101,13 +1099,13 @@ https://fairpass.onrender.com/api
                 )}
 
                 {/* NFT QR Code Status */}
-                {nftCreating || isNFTMinting || isBuyTicketPending ? (
+                {nftCreating || isNFTMinting || isBuyTicketPending || isMintForUserPending ? (
                   <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                     <div className="flex items-center justify-center gap-2 mb-3">
                       <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                       <p className="text-sm text-blue-600 dark:text-blue-400">Creating NFT QR Ticket...</p>
                     </div>
-                    {(isNFTMinting || isBuyTicketPending) && (
+                    {(isNFTMinting || isBuyTicketPending || isMintForUserPending) && (
                       <p className="text-xs text-blue-500 dark:text-blue-300 text-center">Minting on blockchain...</p>
                     )}
                     {isNFTConfirming && (
@@ -1173,7 +1171,7 @@ https://fairpass.onrender.com/api
                     <p className="text-xs text-red-600 dark:text-red-400 text-center mb-2">{nftError}</p>
                     <button
                       onClick={createNFTTicket}
-                      disabled={nftCreating || isNFTMinting || isBuyTicketPending}
+                      disabled={nftCreating || isNFTMinting || isBuyTicketPending || isMintForUserPending}
                       className="btn-primary text-xs px-3 py-1 w-full disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Retry NFT Creation
@@ -1227,13 +1225,13 @@ https://fairpass.onrender.com/api
                       <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200">NFT Ticket</h4>
               </div>
                     
-                    {nftCreating || isNFTMinting || isBuyTicketPending ? (
+                    {nftCreating || isNFTMinting || isBuyTicketPending || isMintForUserPending ? (
                       <div className="space-y-2">
                         <div className="flex items-center justify-center gap-2">
                           <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                           <p className="text-sm text-blue-600 dark:text-blue-400">Creating NFT Ticket...</p>
                         </div>
-                        {(isNFTMinting || isBuyTicketPending) && (
+                        {(isNFTMinting || isBuyTicketPending || isMintForUserPending) && (
                           <p className="text-xs text-blue-500 dark:text-blue-300 text-center">Minting on blockchain...</p>
                         )}
                         {isNFTConfirming && (
@@ -1276,10 +1274,10 @@ https://fairpass.onrender.com/api
                         </p>
                         <button
                           onClick={createNFTTicket}
-                          disabled={nftCreating || isNFTMinting || isBuyTicketPending}
+                          disabled={nftCreating || isNFTMinting || isBuyTicketPending || isMintForUserPending}
                           className="btn-primary text-sm px-4 py-2 w-full disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
-                          {nftCreating || isNFTMinting || isBuyTicketPending ? (
+                          {nftCreating || isNFTMinting || isBuyTicketPending || isMintForUserPending ? (
                             <>
                               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                               Minting...
@@ -1312,11 +1310,6 @@ https://fairpass.onrender.com/api
               </div>
               <p className="text-xs text-green-700 dark:text-green-300 mb-3">
                 Your event ticket has been successfully minted as an NFT on the blockchain with ZK-based QR code!
-                {redirectCountdown && (
-                  <span className="block mt-2 font-medium">
-                    Redirecting to event page in {redirectCountdown} seconds...
-                  </span>
-                )}
               </p>
               <div className="text-xs text-green-600 dark:text-green-400 mb-4">
                 <p>Contract: {event.blockchainEventAddress}</p>
@@ -1487,10 +1480,10 @@ https://fairpass.onrender.com/api
                 </button>
                 <button 
                   onClick={handlePayment}
-                  disabled={isPaymentPending || isDirectPaymentPending || isBuyTicketPending}
+                  disabled={isPaymentPending || isDirectPaymentPending || isBuyTicketPending || isMintForUserPending}
                   className="btn-primary flex-1"
                 >
-                  {(isPaymentPending || isDirectPaymentPending || isBuyTicketPending) ? (
+                  {(isPaymentPending || isDirectPaymentPending || isBuyTicketPending || isMintForUserPending) ? (
                     <>
                       <div className="w-4 h-4 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin mr-2"></div>
                       Processing Payment...
@@ -1601,7 +1594,7 @@ https://fairpass.onrender.com/api
                 </p>
                 
                 {/* Mint NFT Button for Paid Events */}
-                {!nftCreated && !nftCreating && !isNFTMinting && !isBuyTicketPending && (
+                {!nftCreated && !nftCreating && !isNFTMinting && !isBuyTicketPending || isMintForUserPending && !isMintForUserPending && (
                   <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                     <div className="text-center">
                       <p className="text-sm text-blue-600 dark:text-blue-400 mb-3">
@@ -1609,10 +1602,10 @@ https://fairpass.onrender.com/api
                       </p>
                       <button
                         onClick={createNFTTicket}
-                        disabled={nftCreating || isNFTMinting || isBuyTicketPending}
+                        disabled={nftCreating || isNFTMinting || isBuyTicketPending || isMintForUserPending}
                         className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {nftCreating || isNFTMinting || isBuyTicketPending ? (
+                        {nftCreating || isNFTMinting || isBuyTicketPending || isMintForUserPending ? (
                           <div className="flex items-center gap-2">
                             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                             Creating NFT...
@@ -1626,13 +1619,13 @@ https://fairpass.onrender.com/api
                 )}
 
                 {/* NFT QR Code Status */}
-                {nftCreating || isNFTMinting || isBuyTicketPending ? (
+                {nftCreating || isNFTMinting || isBuyTicketPending || isMintForUserPending ? (
                   <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                     <div className="flex items-center justify-center gap-2 mb-3">
                       <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                       <p className="text-sm text-blue-600 dark:text-blue-400">Creating NFT QR Ticket...</p>
                     </div>
-                    {(isNFTMinting || isBuyTicketPending) && (
+                    {(isNFTMinting || isBuyTicketPending || isMintForUserPending) && (
                       <p className="text-xs text-blue-500 dark:text-blue-300 text-center">Minting on blockchain...</p>
                     )}
                     {isNFTConfirming && (
@@ -1698,7 +1691,7 @@ https://fairpass.onrender.com/api
                     <p className="text-xs text-red-600 dark:text-red-400 text-center mb-2">{nftError}</p>
                     <button
                       onClick={createNFTTicket}
-                      disabled={nftCreating || isNFTMinting || isBuyTicketPending}
+                      disabled={nftCreating || isNFTMinting || isBuyTicketPending || isMintForUserPending}
                       className="btn-primary text-xs px-3 py-1 w-full disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Retry NFT Creation
