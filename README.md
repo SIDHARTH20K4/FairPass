@@ -4,8 +4,6 @@
 
 ---
 
-# 🎟️ FairPass – Smart Contract Documentation
-
 ## 📌 Overview
 FairPass is a blockchain-based ticketing system using NFTs to ensure **fair resale, transparent ownership, and fraud prevention**.  
 The system leverages **Zero-Knowledge Proofs (ZKPs)** during event check-in to validate legitimate ticket holders **without exposing sensitive wallet information**.
@@ -13,7 +11,7 @@ The system leverages **Zero-Knowledge Proofs (ZKPs)** during event check-in to v
 Core Contracts:
 1. **EventImplementation.sol** → Manages each event (buying, check-in, ZK validation).  
 2. **EventTicket.sol** → ERC-721 NFT contract representing tickets.  
-3. **PlatformManager.sol** → Manages multiple events and fee-sharing.  
+3. **EventFactory.sol** → Manages multiple events and fee-sharing.  
 
 ---
 
@@ -49,7 +47,7 @@ ERC-721 NFT contract for ticket representation.
 
 ---
 
-## 🌐 PlatformManager.sol
+## 🌐 EventManager.sol
 Manages multiple events and revenue logic.
 
 ### 🔑 Core Functionalities
@@ -75,7 +73,7 @@ Manages multiple events and revenue logic.
 ---
 
 ## 🧩 Example Flow
-1. Organizer creates event via **PlatformManager**.  
+1. Organizer creates event via **EventFactory**.  
 2. Users buy tickets using **EventImplementation**.  
 3. NFTs minted by **EventTicket** contract.  
 4. At venue:  
