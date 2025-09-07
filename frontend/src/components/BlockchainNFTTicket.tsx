@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useReadContract, useWriteContract, usePublicClient, useWaitForTransactionReceipt } from 'wagmi';
 import { eventTicketABI } from '../../web3/constants';
 import { createEventHooks } from '../../web3/implementationConnections';
@@ -34,6 +34,15 @@ export default function BlockchainNFTTicket({
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [checkInSuccess, setCheckInSuccess] = useState(false);
   
+  // Minting state for Free + Approval events
+  const [isMinting, setIsMinting] = useState(false);
+  const [mintError, setMintError] = useState<string | null>(null);
+  const [mintSuccess, setMintSuccess] = useState(false);
+  const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
+  const [nftCreated, setNftCreated] = useState(false);
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hasTriedFindingNFT = useRef(false);
+  
   // Resale state
   const [showResaleModal, setShowResaleModal] = useState(false);
   const [resalePrice, setResalePrice] = useState('');
@@ -60,6 +69,15 @@ export default function BlockchainNFTTicket({
     query: { enabled: !!checkInHash }
   });
 
+  // Minting functionality for Free + Approval events
+  const { mintForUser, hash: mintHash, isPending: isMintPending, error: mintHookError } = eventHooks?.useMintForUser() || {};
+  
+  // Monitor minting transaction
+  const { isLoading: isMintTxLoading, isSuccess: isMintTxSuccess } = useWaitForTransactionReceipt({
+    hash: mintHash,
+    query: { enabled: !!mintHash }
+  });
+
   // Resale functionality
   const { writeContract: writeResaleContract, data: resaleTxHash, error: resaleError, isPending: resalePending } = useWriteContract();
   const { data: resaleTxReceipt, isLoading: resaleTxLoading } = useWaitForTransactionReceipt({
@@ -78,7 +96,7 @@ export default function BlockchainNFTTicket({
   });
 
   // Get user's NFT balance
-  const { data: nftBalance } = useReadContract({
+  const { data: nftBalance, refetch: refetchBalance } = useReadContract({
     address: ticketNFTAddress as `0x${string}`,
     abi: eventTicketABI,
     functionName: 'balanceOf',
@@ -109,37 +127,155 @@ export default function BlockchainNFTTicket({
     }
   }, []);
 
-  // Function to find user's NFT token using blockchain client
+  // Function to find user's NFT token using proper ABI functions
   const findUserNFT = useCallback(async () => {
-    if (!ticketNFTAddress || !userAddress || !nftBalance || Number(nftBalance) === 0 || !publicClient) {
+    if (!ticketNFTAddress || !userAddress || !publicClient) {
       setLoading(false);
       return;
     }
+
+    // Prevent multiple simultaneous calls
+    if (hasTriedFindingNFT.current) {
+      console.log('🔄 NFT search already in progress, skipping...');
+      return;
+    }
+    
+    hasTriedFindingNFT.current = true;
 
     try {
       setLoading(true);
       setError(null);
 
-      // Try to find the token by checking ownership of recent token IDs
-      // This assumes token IDs are sequential starting from 1
+      // Set a timeout to prevent infinite loading
+      const timeout = setTimeout(() => {
+        console.log('⏰ NFT search timeout - stopping loading');
+        setLoading(false);
+        setError('NFT search timed out. Please try refreshing.');
+      }, 15000); // Reduced to 15 seconds
+      
+      loadingTimeoutRef.current = timeout;
+
+      console.log('🔍 Starting NFT search for user:', userAddress);
+      console.log('📋 Using ticket NFT contract:', ticketNFTAddress);
+
+      // First, get the user's balance
+      let currentBalance = nftBalance;
+      if (!currentBalance || Number(currentBalance) === 0) {
+        console.log('🔍 Balance not available from hook, fetching directly...');
+        currentBalance = await publicClient.readContract({
+          address: ticketNFTAddress as `0x${string}`,
+          abi: eventTicketABI,
+          functionName: 'balanceOf',
+          args: [userAddress as `0x${string}`],
+        });
+        console.log('📊 Direct balance fetch result:', currentBalance);
+      }
+
+      if (!currentBalance || Number(currentBalance) === 0) {
+        console.log('📊 No NFT balance found for user');
+        setLoading(false);
+        return;
+      }
+
+      console.log('✅ User has NFT balance:', currentBalance.toString());
+
+      // Try to get total supply to determine search range
+      let maxTokens = 50; // Reduced default range
+      try {
+        const totalSupply = await publicClient.readContract({
+          address: ticketNFTAddress as `0x${string}`,
+          abi: eventTicketABI,
+          functionName: 'totalSupply',
+        });
+        maxTokens = Math.min(Number(totalSupply) + 5, 50); // Smaller buffer
+        console.log('📊 Total supply:', totalSupply, 'Searching up to token:', maxTokens);
+      } catch (error) {
+        console.log('⚠️ Could not get total supply, using default range of 50');
+      }
+      
+      // Search for the user's token more efficiently
       let foundToken = null;
       
-      for (let tokenId = 1; tokenId <= 100; tokenId++) { // Check first 100 tokens
-        try {
-          const owner = await publicClient.readContract({
-            address: ticketNFTAddress as `0x${string}`,
-            abi: eventTicketABI,
-            functionName: 'ownerOf',
-            args: [BigInt(tokenId)],
-          });
+      // Try to get recent Transfer events to find user's tokens
+      try {
+        console.log('🔍 Checking recent Transfer events for user tokens...');
+        const transferEvents = await publicClient.getLogs({
+          address: ticketNFTAddress as `0x${string}`,
+          event: {
+            type: 'event',
+            name: 'Transfer',
+            inputs: [
+              { type: 'address', indexed: true, name: 'from' },
+              { type: 'address', indexed: true, name: 'to' },
+              { type: 'uint256', indexed: true, name: 'tokenId' }
+            ]
+          },
+          fromBlock: 'earliest',
+          toBlock: 'latest',
+          args: {
+            to: userAddress as `0x${string}`
+          }
+        });
+        
+        console.log('📋 Found Transfer events:', transferEvents.length);
+        
+        // Check the most recent transfer events first
+        for (const event of transferEvents.reverse()) {
+          if (event.args && event.args.tokenId) {
+            const tokenId = event.args.tokenId.toString();
+            console.log('🔍 Checking token ID from event:', tokenId);
+            
+            try {
+              const owner = await publicClient.readContract({
+                address: ticketNFTAddress as `0x${string}`,
+                abi: eventTicketABI,
+                functionName: 'ownerOf',
+                args: [BigInt(tokenId)],
+              });
+              
+              if ((owner as string).toLowerCase() === userAddress.toLowerCase()) {
+                foundToken = tokenId;
+                console.log('🎯 Found user NFT via Transfer event:', foundToken);
+                break;
+              }
+            } catch (error) {
+              // Token might not exist anymore, continue
+              continue;
+            }
+          }
+        }
+      } catch (error) {
+        console.log('⚠️ Could not get Transfer events, falling back to manual search');
+      }
+      
+      // If not found via events, do manual search
+      if (!foundToken) {
+        console.log('🔍 Performing manual token search...');
+        const searchPromises = [];
+        
+        // Create search promises in batches
+        for (let tokenId = 1; tokenId <= maxTokens; tokenId++) {
+          searchPromises.push(
+            publicClient.readContract({
+              address: ticketNFTAddress as `0x${string}`,
+              abi: eventTicketABI,
+              functionName: 'ownerOf',
+              args: [BigInt(tokenId)],
+            }).then(owner => ({ tokenId, owner }))
+            .catch(() => ({ tokenId, owner: null }))
+          );
+        }
 
-          if (owner.toLowerCase() === userAddress.toLowerCase()) {
-            foundToken = tokenId.toString();
+        // Wait for all searches to complete
+        const results = await Promise.all(searchPromises);
+        
+        // Find the token owned by the user
+        for (const result of results) {
+          if (result.owner && (result.owner as string).toLowerCase() === userAddress.toLowerCase()) {
+            foundToken = result.tokenId.toString();
+            console.log('🎯 Found user NFT with token ID:', foundToken);
             break;
           }
-        } catch (error) {
-          // Token doesn't exist or other error, continue
-          continue;
         }
       }
 
@@ -148,6 +284,7 @@ export default function BlockchainNFTTicket({
         
         // Get token URI
         try {
+          console.log('🔍 Fetching token URI for token:', foundToken);
           const tokenURI = await publicClient.readContract({
             address: ticketNFTAddress as `0x${string}`,
             abi: eventTicketABI,
@@ -155,26 +292,177 @@ export default function BlockchainNFTTicket({
             args: [BigInt(foundToken)],
           });
 
+          console.log('📄 Token URI:', tokenURI);
           const metadata = await fetchMetadata(tokenURI as string);
           if (metadata) {
+            console.log('✅ NFT metadata loaded:', metadata);
             setNftMetadata(metadata);
+          } else {
+            console.warn('⚠️ Could not load NFT metadata');
           }
         } catch (error) {
-          console.error('Error getting token URI:', error);
+          console.error('❌ Error getting token URI:', error);
         }
+      } else {
+        console.log('❌ No NFT found for user in range 1-' + maxTokens);
+        setError('No NFT found in your wallet. Please try minting again.');
       }
     } catch (error) {
-      console.error('Error finding user NFT:', error);
-      setError('Failed to load NFT data');
+      console.error('❌ Error finding user NFT:', error);
+      setError('Failed to load NFT data: ' + (error as Error).message);
     } finally {
+      // Clear timeout
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+      hasTriedFindingNFT.current = false;
       setLoading(false);
     }
   }, [ticketNFTAddress, userAddress, nftBalance, publicClient, fetchMetadata]);
 
+  // Function to manually refresh NFT data
+  const refreshNFTData = useCallback(async () => {
+    console.log('🔄 Manual refresh triggered');
+    setLoading(true);
+    setError(null);
+    setMintSuccess(false);
+    setIsAutoRefreshing(false); // Reset auto-refresh flag
+    hasTriedFindingNFT.current = false; // Reset NFT search flag
+    
+    try {
+      // First refetch the balance
+      console.log('🔄 Refetching balance...');
+      await refetchBalance();
+      
+      // Wait a bit for balance to update
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Then find the NFT
+      console.log('🔄 Finding NFT...');
+      await findUserNFT();
+      
+    } catch (error) {
+      console.error('❌ Error during refresh:', error);
+      setError('Failed to refresh NFT data');
+    } finally {
+      setLoading(false);
+    }
+  }, [refetchBalance, findUserNFT]);
+
   // Load NFT data when component mounts or dependencies change
   useEffect(() => {
-    findUserNFT();
+    // Add a small delay to prevent rapid calls
+    const timeoutId = setTimeout(() => {
+      findUserNFT();
+    }, 100);
+    
+    return () => clearTimeout(timeoutId);
   }, [findUserNFT]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Auto-refresh when we detect balance but no NFT details (for newly minted NFTs)
+  useEffect(() => {
+    const hasBalanceButNoDetails = nftBalance && Number(nftBalance) > 0 && (!nftTokenId || !nftMetadata);
+    if (hasBalanceButNoDetails && !loading && !isAutoRefreshing) {
+      console.log('🔄 Auto-refreshing for newly minted NFT...');
+      setIsAutoRefreshing(true);
+      const timeoutId = setTimeout(() => {
+        refreshNFTData();
+      }, 2000); // Increased delay to prevent rapid calls
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [nftBalance, nftTokenId, nftMetadata, loading, isAutoRefreshing, refreshNFTData]);
+
+  // Handle minting success
+  useEffect(() => {
+    if (isMintTxSuccess) {
+      console.log('✅ NFT minting successful!');
+      setMintSuccess(true);
+      setIsMinting(false);
+      setMintError(null);
+      setNftCreated(true);
+      // Refresh NFT data after successful minting
+      setTimeout(() => {
+        console.log('🔄 Refreshing NFT data after minting...');
+        refreshNFTData();
+      }, 2000); // Wait 2 seconds for blockchain to update
+    }
+  }, [isMintTxSuccess, refreshNFTData]);
+
+  // Handle minting error
+  useEffect(() => {
+    if (mintHookError) {
+      console.error('❌ Minting error:', mintHookError);
+      setMintError(mintHookError.message || 'Failed to mint NFT');
+      setIsMinting(false);
+    }
+  }, [mintHookError]);
+
+  // Function to mint NFT for Free + Approval events
+  const handleMintNFT = async () => {
+    if (!mintForUser || !userAddress) {
+      setMintError('Minting not available');
+      return;
+    }
+
+    try {
+      setIsMinting(true);
+      setMintError(null);
+      setMintSuccess(false);
+
+      // Create QR code data
+      const qrPayload = {
+        eventId: event.id || eventContractAddress,
+        eventName: event.name,
+        participantAddress: userAddress,
+        participantName: 'Event Participant',
+        approvalDate: new Date().toISOString(),
+        type: 'event-ticket'
+      };
+      
+      // Create QR code image URL
+      const qrData = encodeURIComponent(JSON.stringify(qrPayload));
+      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${qrData}&format=png&margin=10`;
+      
+      // Create metadata for the NFT (similar to registration page)
+      const metadata = {
+        name: `${event.name} - Event Ticket`,
+        description: `Official ticket for ${event.name} event`,
+        image: qrImageUrl,
+        attributes: [
+          { trait_type: "Event", value: event.name },
+          { trait_type: "Type", value: "Event Ticket" },
+          { trait_type: "Status", value: "Valid" },
+          { trait_type: "Participant", value: userAddress }
+        ]
+      };
+
+      // Upload metadata to IPFS (simplified - in production you'd use a proper IPFS service)
+      const metadataURI = `data:application/json;base64,${btoa(JSON.stringify(metadata))}`;
+      
+      console.log('🎨 Minting NFT for user:', userAddress);
+      console.log('📄 Metadata URI:', metadataURI);
+      console.log('🎫 QR Code URL:', qrImageUrl);
+      
+      // Call the mintForUser function
+      mintForUser(userAddress, metadataURI);
+      
+    } catch (error) {
+      console.error('❌ Error preparing NFT mint:', error);
+      setMintError('Failed to prepare NFT minting');
+      setIsMinting(false);
+    }
+  };
 
   // Define fetchResaleInfo function before it's used
   const fetchResaleInfo = useCallback(async () => {
@@ -337,6 +625,17 @@ export default function BlockchainNFTTicket({
               <p className="text-xs text-foreground/60">Loading NFT...</p>
             </div>
           </div>
+          <div className="space-y-2">
+            <p className="text-sm text-foreground/70">
+              Searching for your NFT ticket...
+            </p>
+            <button 
+              onClick={refreshNFTData}
+              className="btn-secondary text-xs px-3 py-1"
+            >
+              Force Refresh
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -353,12 +652,24 @@ export default function BlockchainNFTTicket({
           </div>
           <p className="font-medium text-red-600 dark:text-red-400">Error Loading NFT</p>
           <p className="text-sm text-foreground/70">{error}</p>
-          <button 
-            onClick={findUserNFT}
-            className="btn-secondary text-sm"
-          >
-            Retry
-          </button>
+          <div className="flex gap-2 justify-center">
+            <button 
+              onClick={refreshNFTData}
+              className="btn-primary text-sm"
+            >
+              Retry
+            </button>
+            <button 
+              onClick={() => {
+                setError(null);
+                setLoading(true);
+                findUserNFT();
+              }}
+              className="btn-secondary text-sm"
+            >
+              Force Search
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -367,6 +678,33 @@ export default function BlockchainNFTTicket({
   // Check if this is a paid event that requires payment
   const isPaidEvent = event?.price && event.price > 0;
   const requiresApproval = event?.approvalNeeded;
+  
+  // Debug logging
+  console.log('🎫 BlockchainNFTTicket render:', {
+    eventName: event.name,
+    isPaidEvent,
+    requiresApproval,
+    userAddress,
+    eventContractAddress,
+    ticketNFTAddress,
+    nftBalance: nftBalance?.toString(),
+    nftTokenId,
+    hasMetadata: !!nftMetadata,
+    loading,
+    error
+  });
+  
+  console.log('🔍 NFT Detection Debug:', {
+    nftBalance: nftBalance?.toString(),
+    nftTokenId,
+    nftMetadata: !!nftMetadata,
+    hasBalance: !!(nftBalance && Number(nftBalance) > 0),
+    hasTokenId: !!nftTokenId,
+    hasMetadata: !!nftMetadata,
+    isPaidEvent,
+    requiresApproval
+  });
+  
   const hasNoNFT = !nftBalance || Number(nftBalance) === 0 || !nftTokenId || !nftMetadata;
 
   if (hasNoNFT) {
@@ -404,6 +742,95 @@ export default function BlockchainNFTTicket({
           </div>
         </div>
       );
+    }
+
+    // For free events with approval, show mint NFT button OR the NFT if found
+    if (!isPaidEvent && requiresApproval) {
+      console.log('🔍 Free + Approval event detected');
+      console.log('📊 NFT Status:', { nftTokenId, hasMetadata: !!nftMetadata, metadataName: nftMetadata?.name, nftBalance: nftBalance?.toString() });
+      
+      // If we have NFT data, show the NFT instead of mint button
+      if (nftTokenId && nftMetadata && nftMetadata.name) {
+        console.log('✅ NFT found for Free + Approval event, showing NFT display');
+        // Show the actual NFT display - this will be handled by the main return statement below
+        // We'll let the component continue to the main NFT display section
+      } else {
+        console.log('❌ No NFT data found for Free + Approval event, showing mint button');
+        // If we have a balance but no token ID/metadata, we might be in the process of detecting a newly minted NFT
+        const hasBalanceButNoDetails = nftBalance && Number(nftBalance) > 0 && (!nftTokenId || !nftMetadata);
+        
+        return (
+          <div className="card p-4 text-center">
+            <div className="w-12 h-12 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-3">
+              <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <p className="font-medium mb-2">Registration Approved!</p>
+            <p className="text-sm text-foreground/70 mb-4">
+              Your registration has been approved. You can now mint your free NFT ticket.
+            </p>
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-foreground">
+                Event: {event.name}
+              </div>
+              
+              {/* Show minting status */}
+              {mintSuccess && (
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                  <p className="text-sm text-green-800 dark:text-green-200">
+                    ✅ NFT minted successfully! Refreshing...
+                  </p>
+                </div>
+              )}
+              
+              {/* Show detection in progress */}
+              {(hasBalanceButNoDetails || nftCreated) && !mintSuccess && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    🔍 NFT detected but details are loading... Please wait or click "Check Status"
+                  </p>
+                </div>
+              )}
+              
+              {mintError && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                  <p className="text-sm text-red-800 dark:text-red-200">
+                    ❌ {mintError}
+                  </p>
+                </div>
+              )}
+              
+              <div className="flex gap-2 justify-center">
+                <button 
+                  onClick={handleMintNFT}
+                  disabled={!!(isMinting || isMintPending || isMintTxLoading || mintSuccess || hasBalanceButNoDetails || nftCreated)}
+                  className="btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isMinting || isMintPending || isMintTxLoading ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      {isMintTxLoading ? 'Confirming...' : 'Minting...'}
+                    </span>
+                  ) : mintSuccess || hasBalanceButNoDetails || nftCreated ? (
+                    'Minted!'
+                  ) : (
+                    'Mint NFT Ticket'
+                  )}
+                </button>
+                <button 
+                  onClick={refreshNFTData}
+                  className="btn-secondary text-sm"
+                >
+                  Check Status
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
     }
 
     // For other cases, show the original "No NFT Ticket Found" message
@@ -545,7 +972,7 @@ export default function BlockchainNFTTicket({
             <div className="flex justify-between">
               <span className="text-foreground/70">Contract:</span>
               <span className="font-mono text-xs">
-                {ticketNFTAddress?.slice(0, 6)}...{ticketNFTAddress?.slice(-4)}
+                {ticketNFTAddress ? `${(ticketNFTAddress as string).slice(0, 6)}...${(ticketNFTAddress as string).slice(-4)}` : 'N/A'}
               </span>
             </div>
           </div>

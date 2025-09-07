@@ -327,6 +327,55 @@ body {
   }
 }
 
+/* Select dropdown specific styles */
+.input[type="select"],
+select.input,
+select {
+  color: #000000; /* Black text for better contrast on white background */
+  background: var(--input);
+  border: 1px solid var(--input-border);
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
+  padding-right: 2.5rem;
+}
+
+/* Dark mode select dropdown text */
+@media (prefers-color-scheme: dark) {
+  .input[type="select"],
+  select.input,
+  select {
+    color: #ffffff; /* White text for dark mode */
+    background: var(--input);
+  }
+  
+  /* Ensure option text is visible in dark mode */
+  select option {
+    color: #000000; /* Black text for options in dark mode */
+    background: #ffffff; /* White background for options */
+  }
+  
+  /* Hover state for options */
+  select option:hover {
+    background: #f0f0f0; /* Light gray background on hover */
+    color: #000000; /* Black text on hover */
+  }
+  
+  /* Selected option styling */
+  select option:checked {
+    background: #007bff; /* Blue background for selected option */
+    color: #ffffff; /* White text for selected option */
+  }
+}
+
 .input[type="date"]::-webkit-calendar-picker-indicator,
 .input[type="time"]::-webkit-calendar-picker-indicator {
   filter: invert(1);

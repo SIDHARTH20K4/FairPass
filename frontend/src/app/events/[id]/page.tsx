@@ -9,7 +9,7 @@ import { useEffect, useState, useCallback } from "react";
 import React from "react";
 import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt } from "wagmi";
 import { parseEther, formatEther } from "viem";
-import { eventTicketABI } from "../../../../web3/constants";
+import { eventTicketABI, eventImplementationABI } from "../../../../web3/constants";
 import NFTDisplay from "@/components/tickets/NFTDisplay";
 import Toast from "@/components/Toast";
 import BlockchainNFTTicket from "@/components/BlockchainNFTTicket";
@@ -72,6 +72,16 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     resalesDone: number;
     resalesRemaining: number;
   } | null>(null);
+
+  // Get ticket NFT contract address for Free + Approval events
+  const { data: ticketNFTAddress } = useReadContract({
+    address: event?.blockchainEventAddress as `0x${string}`,
+    abi: eventImplementationABI,
+    functionName: 'ticketNFT',
+    query: {
+      enabled: !!event?.blockchainEventAddress,
+    },
+  });
 
   // Wagmi hooks for resale functionality
   const { writeContract: writeResaleContract, data: resaleTxHash, error: resaleError, isPending: resalePending } = useWriteContract();

@@ -14,6 +14,34 @@ const LOCATIONS = [
   "Singapore","Mumbai","Bengaluru","Delhi","Jakarta","Seoul","Tokyo","Sydney","Taipei","Dubai","London","Paris","Berlin","Lisbon","Amsterdam","San Francisco","New York","Toronto","Austin","Buenos Aires","São Paulo","Cape Town","Nairobi","Worldwide",
 ];
 
+// Location coordinates mapping
+const LOCATION_COORDINATES: { [key: string]: [number, number] } = {
+  "Singapore": [1.3521, 103.8198],
+  "Mumbai": [19.0760, 72.8777],
+  "Bengaluru": [12.9716, 77.5946],
+  "Delhi": [28.6139, 77.2090],
+  "Jakarta": [-6.2088, 106.8456],
+  "Seoul": [37.5665, 126.9780],
+  "Tokyo": [35.6762, 139.6503],
+  "Sydney": [-33.8688, 151.2093],
+  "Taipei": [25.0330, 121.5654],
+  "Dubai": [25.2048, 55.2708],
+  "London": [51.5074, -0.1278],
+  "Paris": [48.8566, 2.3522],
+  "Berlin": [52.5200, 13.4050],
+  "Lisbon": [38.7223, -9.1393],
+  "Amsterdam": [52.3676, 4.9041],
+  "San Francisco": [37.7749, -122.4194],
+  "New York": [40.7128, -74.0060],
+  "Toronto": [43.6532, -79.3832],
+  "Austin": [30.2672, -97.7431],
+  "Buenos Aires": [-34.6118, -58.3960],
+  "São Paulo": [-23.5505, -46.6333],
+  "Cape Town": [-33.9249, 18.4241],
+  "Nairobi": [-1.2921, 36.8219],
+  "Worldwide": [0, 0], // Default center for worldwide
+};
+
 const CURRENCIES = [
   { value: "SONIC", label: "Sonic Tokens", symbol: "SONIC" },
 ];
@@ -359,27 +387,28 @@ export default function CreateEventPage() {
                     {LOCATIONS.map((loc) => (
                       <option key={loc} value={loc}>{loc}</option>
                     ))}
-          </select>
-        </div>
+                  </select>
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-3">
-            <SimpleDatePicker value={date} onChange={setDate} label="Event Date" required />
-          </div>
+                    <SimpleDatePicker value={date} onChange={setDate} label="Event Date" required />
+                  </div>
                   <div className="space-y-3">
-            <SimpleTimePicker value={time} onChange={setTime} label="Event Time" required />
-          </div>
-        </div>
+                    <SimpleTimePicker value={time} onChange={setTime} label="Event Time" required />
+                  </div>
+                </div>
 
                 <div className="space-y-3">
                   <label className="block text-lg font-medium text-foreground">
                     Precise Location (Optional)
                   </label>
-        <LocationMap 
-          lat={lat ? Number(lat) : undefined}
-          lng={lng ? Number(lng) : undefined}
-          onLocationChange={(lat, lng) => { setLat(lat.toString()); setLng(lng.toString()); }}
-        />
+                  <LocationMap 
+                    lat={lat ? Number(lat) : undefined}
+                    lng={lng ? Number(lng) : undefined}
+                    selectedLocation={location}
+                    onLocationChange={(lat, lng) => { setLat(lat.toString()); setLng(lng.toString()); }}
+                  />
                 </div>
               </div>
 

@@ -89,7 +89,7 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
   const eventHooks = contractAddress ? createEventHooks(contractAddress) : null;
   
   // Payment hooks (must be declared before useWaitForTransactionReceipt)
-  const { buyTicket, hash: buyTicketHash, isPending: isBuyTicketPending || isMintForUserPending, error: buyTicketError } = useBuyTicket(contractAddress || '');
+  const { buyTicket, hash: buyTicketHash, isPending: isBuyTicketPending, error: buyTicketError } = useBuyTicket(contractAddress || '');
   const { mintForUser, hash: mintForUserHash, isPending: isMintForUserPending, error: mintForUserError } = useMintForUser(contractAddress || '');
   
   // NFT contract address hook
@@ -374,7 +374,6 @@ https://fairpass.onrender.com/api
   useEffect(() => {
     if (mintForUserHash) {
       console.log('✅ Mint for user transaction submitted:', mintForUserHash);
-      setNftTxHash(mintForUserHash);
     }
   }, [mintForUserHash]);
 
@@ -395,10 +394,20 @@ https://fairpass.onrender.com/api
       setPaymentReceipt({ hash: confirmedHash, confirmed: true });
       setPaymentStep('success');
       console.log('✅ Payment confirmed - setting payment step to success');
-      // Proceed with registration after successful payment
-      proceedWithRegistration();
+      
+      // For Paid + Approval events, redirect to event page after successful payment
+      if (event?.isPaid && event?.approvalNeeded) {
+        console.log('🎉 Paid + Approval event payment successful - redirecting to event page');
+        // Wait a moment for the success state to show, then redirect
+        setTimeout(() => {
+          window.location.href = `/events/${id}`;
+        }, 2000); // 2 second delay to show success message
+      } else {
+        // Proceed with registration after successful payment for other event types
+        proceedWithRegistration();
+      }
     }
-  }, [isPaymentConfirmed, paymentHash, buyTicketHash]);
+  }, [isPaymentConfirmed, paymentHash, buyTicketHash, event?.isPaid, event?.approvalNeeded, id]);
 
   // Proceed with registration after payment
   async function proceedWithRegistration() {
@@ -483,7 +492,7 @@ https://fairpass.onrender.com/api
       return;
     }
 
-    if (isNFTMinting || isBuyTicketPending || isMintForUserPending || isMintForUserPending) {
+    if (isNFTMinting || isBuyTicketPending || isMintForUserPending) {
       console.log('NFT minting already in progress');
       return;
     }
@@ -1067,14 +1076,31 @@ https://fairpass.onrender.com/api
                 </div>
                 <h3 className="text-lg font-semibold text-green-600">Payment Successful!</h3>
                 <p className="text-sm text-foreground/70">
-                  Your payment has been confirmed. You can now mint your NFT QR ticket.
+                  {event?.approvalNeeded ? 
+                    'Your payment has been confirmed! Redirecting to event page to view your NFT ticket...' :
+                    'Your payment has been confirmed. You can now mint your NFT QR ticket.'
+                  }
                 </p>
+                {event?.approvalNeeded && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-center gap-2 text-blue-600">
+                      <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-sm">Redirecting...</span>
+                    </div>
+                    <button
+                      onClick={() => window.location.href = `/events/${id}`}
+                      className="btn-primary text-sm"
+                    >
+                      View Event Page
+                    </button>
+                  </div>
+                )}
                 <div className="text-xs text-foreground/50">
                   Debug: Payment Step = {paymentStep} | Event isPaid = {event?.isPaid?.toString()} | Price = {event?.price}
                 </div>
                 
                 {/* Mint NFT Button for Paid Events */}
-                {!nftCreated && !nftCreating && !isNFTMinting && !isBuyTicketPending || isMintForUserPending && !isMintForUserPending && (
+                {!nftCreated && !nftCreating && !isNFTMinting && !isBuyTicketPending && !isMintForUserPending && (
                   <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                     <div className="text-center">
                       <p className="text-sm text-blue-600 dark:text-blue-400 mb-3">
@@ -1594,7 +1620,7 @@ https://fairpass.onrender.com/api
                 </p>
                 
                 {/* Mint NFT Button for Paid Events */}
-                {!nftCreated && !nftCreating && !isNFTMinting && !isBuyTicketPending || isMintForUserPending && !isMintForUserPending && (
+                {!nftCreated && !nftCreating && !isNFTMinting && !isBuyTicketPending && !isMintForUserPending && (
                   <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                     <div className="text-center">
                       <p className="text-sm text-blue-600 dark:text-blue-400 mb-3">
