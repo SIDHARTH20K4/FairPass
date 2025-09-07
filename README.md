@@ -71,7 +71,7 @@ ERC-721 NFT contract for ticket representation.
 
 ---
 
-## 🌐 PlatformManager.sol
+## 🌐 EventFactory.sol
 Manages multiple events and revenue logic.
 
 ### 🔑 Core Functionalities
