@@ -1,93 +1,93 @@
 # 🎟️ FairPass – NFT-based Event Ticketing
 
-> Transparent. Secure. Fair. – The future of event ticketing.
+> Transparent · Secure · Fair
 
 ---
 
 ## 📌 Overview
 FairPass is a blockchain-based ticketing system using NFTs to ensure **fair resale, transparent ownership, and fraud prevention**.  
-The system leverages **Zero-Knowledge Proofs (ZKPs)** during event check-in to validate legitimate ticket holders **without exposing sensitive wallet information**.
 
-Core Contracts:
-1. **EventImplementation.sol** → Manages each event (buying, check-in, ZK validation).  
-2. **EventTicket.sol** → ERC-721 NFT contract representing tickets.  
-3. **EventFactory.sol** → Manages multiple events and fee-sharing.  
+The system leverages **Zero-Knowledge Proofs (ZKPs)** during event check-in to validate ticket holders **without exposing sensitive wallet information**.
+
+**Core Contracts**
+1. **EventImplementation.sol** → Manages each event (buying, check-in, ZK validation)  
+2. **EventTicket.sol** → ERC-721 NFT contract representing tickets  
+3. **EventManager.sol** → Deploys/manages events and handles fee-sharing  
 
 ---
 
 ## 🏗️ EventImplementation.sol
-Main contract for event logic.
+Handles event-specific logic.
 
-### 🔑 Core Functionalities
-- **Constructor** → Initializes event (name, type, price, organizer, platform).  
-- **buyTicket(string metadataURI)** → Users buy tickets; NFT minted.  
-- **mintForUser(address user, string metadataURI)** → Organizer mints tickets directly (batch/lazy minting).  
-- **checkIn(uint256 tokenId, ZKProof proof)** →  
-  - Verifies **Zero-Knowledge Proof** that the user owns the valid NFT.  
-  - Burns the ticket to prevent reuse (screenshot fraud).  
-- **ownerOfNFT(uint256 tokenId)** → Fetches NFT owner.  
-- **registerMe()** → Organizer registers themselves.  
-- **Ownership Functions** → `owner()`, `transferOwnership()`, `renounceOwnership()`.  
+**Functions**
+- `constructor()` → Initializes event (name, type, price, organizer, platform)  
+- `buyTicket(string metadataURI)` → Users purchase tickets, NFT minted  
+- `mintForUser(address user, string metadataURI)` → Organizer mints tickets (batch/lazy minting)  
+- `checkIn(uint256 tokenId, ZKProof proof)` →  
+  - Verifies ownership with **ZK proof**  
+  - Burns ticket after check-in to prevent reuse  
+- `ownerOfNFT(uint256 tokenId)` → Returns NFT owner  
+- `registerMe()` → Organizer registration  
+- Ownership → `owner()`, `transferOwnership()`, `renounceOwnership()`  
 
-✅ **ZK Integration**: Ensures only the rightful ticket holder can check in, even if QR codes/screenshots are shared.  
+✅ **ZK Integration** → Prevents fraud (e.g., screenshot reuse of tickets)  
 
 ---
 
 ## 🎟️ EventTicket.sol
-ERC-721 NFT contract for ticket representation.
+ERC-721 contract for tickets.
 
-### 🔑 Core Functionalities
-- **mint(address to, string metadataURI)** → Creates a new NFT ticket.  
-- **burn(uint256 tokenId)** → Destroys NFT (used after successful ZK-based check-in).  
-- **ownerOf(uint256 tokenId)** → Returns ticket owner.  
-- **tokenURI(uint256 tokenId)** → Fetches ticket metadata (IPFS link).  
-- Supports **ERC-721 transfers** (`transferFrom`, `safeTransferFrom`).  
+**Functions**
+- `mint(address to, string metadataURI)` → Mints NFT ticket  
+- `burn(uint256 tokenId)` → Burns ticket (used after check-in)  
+- `ownerOf(uint256 tokenId)` → Returns ticket owner  
+- `tokenURI(uint256 tokenId)` → Metadata (IPFS link)  
+- ERC-721 transfers supported → `transferFrom`, `safeTransferFrom`  
 
-✅ **ZK Context**: Ticket remains private; ZK ensures validation without revealing owner’s wallet.  
+✅ **ZK Context** → Tickets verified without exposing wallet  
 
 ---
 
 ## 🌐 EventManager.sol
-Manages multiple events and revenue logic.
+Deploys and manages multiple events.
 
-### 🔑 Core Functionalities
-- **createEvent(...)** → Deploys a new `EventImplementation` contract for each event.  
-- **getAllEvents()** → Returns list of deployed event contracts.  
-- **getEventDetails(eventAddress)** → Fetch event details.  
+**Functions**
+- `createEvent(...)` → Deploys new `EventImplementation` contract  
+- `getAllEvents()` → Returns list of all event contracts  
+- `getEventDetails(eventAddress)` → Fetch event details  
 
-### 💰 Fee Model
-- **Ticket Revenue** → Goes to organizer.  
-- **Resale Fee** → Platform + organizer share.  
-- **Sonic Gas Refund** → 90% of gas fees returned to smart contract owner.  
+**Fee Model**
+- Ticket sales → 100% to organizer  
+- Resale fee → Revenue share between platform + organizer  
+- Sonic gas refund → **90% of gas fees returned to contract owner**  
 
-✅ **ZK Context**: Platform enforces that every event uses ZK validation at check-in for fraud prevention.  
+✅ **ZK Enforced** → All events require ZK proof at check-in  
 
 ---
 
 ## 🔄 Ticket Lifecycle
-1. **Mint/Buy** → User mints ticket NFT.  
-2. **Resell/Transfer** → Possible via contract logic, with fees enforced.  
-3. **Check-In (with ZK proof)** → At event, user generates a **ZK proof** showing they own the NFT without revealing wallet details. Ticket is then burned.  
-4. **Completion** → No further use after burning.  
+1. **Mint/Buy** → NFT ticket minted to user  
+2. **Resell/Transfer** → Allowed, with enforced platform fee  
+3. **Check-In (ZK proof)** → Proof generated → verified on-chain → ticket burned  
+4. **Completion** → Ticket cannot be reused  
 
 ---
 
 ## 🧩 Example Flow
-1. Organizer creates event via **EventFactory**.  
-2. Users buy tickets using **EventImplementation**.  
-3. NFTs minted by **EventTicket** contract.  
+1. Organizer creates event via **EventManager**  
+2. User buys ticket through **EventImplementation**  
+3. Ticket minted in **EventTicket** contract  
 4. At venue:  
-   - User generates ZK proof on frontend.  
-   - Calls **checkIn(tokenId, proof)**.  
-   - Contract verifies ZK proof and burns NFT.  
-5. Resale generates fees shared by platform & organizer.  
+   - User generates ZK proof  
+   - Calls `checkIn(tokenId, proof)`  
+   - Proof verified → ticket burned  
+5. If resold, resale fees distributed to platform + organizer  
 
 ---
 
-
 ## 💰 Monetization
 - Ticket sales → 100% to organizer  
-- Resale fee → % revenue for platform  
+- Resale fee → Platform + organizer share  
 - Sonic gas refund → **90% of gas fees back to contract owner**  
 
 ---
