@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import WalletConnect from "@/components/tickets/WalletConnect";
+import { getApiUrl } from "@/config/api";
 
 export default function HostSigninPage() {
   const router = useRouter();
@@ -43,7 +44,7 @@ export default function HostSigninPage() {
       setShowRegisterOption(false);
       
       // First check if organization exists
-      const checkResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/organizations/check`, {
+      const checkResponse = await fetch(getApiUrl('/organizations/check'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address: walletAddress }),
