@@ -25,10 +25,6 @@ const Popup = dynamic(
   { ssr: false }
 );
 
-const Polyline = dynamic(
-  () => import("react-leaflet").then((mod) => mod.Polyline),
-  { ssr: false }
-);
 
 const defaultCenter: LatLngExpression = [28.6139, 77.2090]; // Delhi
 
@@ -42,7 +38,6 @@ const LocationMap: React.FC<LocationMapProps> = ({ lat, lng, onLocationChange })
   const [position, setPosition] = useState<LatLngExpression>(
     lat && lng ? [lat, lng] : defaultCenter
   );
-  const [route, setRoute] = useState<LatLngExpression[]>([]);
   const [isClient, setIsClient] = useState(false);
   const [L, setL] = useState<any>(null);
   const markerRef = useRef<any>(null);
@@ -84,24 +79,6 @@ const LocationMap: React.FC<LocationMapProps> = ({ lat, lng, onLocationChange })
     }
   }, [onLocationChange, L]);
 
-  // Get directions (using OSRM)
-  const getDirections = async () => {
-    const start = `${(defaultCenter as number[])[1]},${(defaultCenter as number[])[0]}`;
-    const end = `${(position as number[])[1]},${(position as number[])[0]}`;
-    const url = `https://router.project-osrm.org/route/v1/driving/${start};${end}?overview=full&geometries=geojson`;
-
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-
-      if (data.routes && data.routes.length > 0) {
-        const coords = data.routes[0].geometry.coordinates.map((c: [number, number]) => [c[1], c[0]]);
-        setRoute(coords);
-      }
-    } catch (error) {
-      console.error("Error fetching directions:", error);
-    }
-  };
 
   const center = lat && lng ? [lat, lng] as LatLngExpression : defaultCenter;
 
@@ -155,26 +132,12 @@ const LocationMap: React.FC<LocationMapProps> = ({ lat, lng, onLocationChange })
             </Popup>
           </Marker>
 
-          {/* Show route */}
-          {route.length > 0 && <Polyline positions={route} color="blue" />}
         </MapContainer>
       </div>
       
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-foreground/60">
-          Click on the map or drag the marker to set the event location
-        </p>
-        <button
-          onClick={getDirections}
-          className="btn-secondary text-sm px-3 py-1"
-        >
-          Get Directions
-        </button>
-      </div>
-      
-      <div className="text-sm text-foreground/60 font-mono">
-        Coordinates: {(position as number[])[0].toFixed(6)}, {(position as number[])[1].toFixed(6)}
-      </div>
+      <p className="text-sm text-foreground/60">
+        Click on the map or drag the marker to set the event location
+      </p>
     </div>
   );
 };

@@ -38,6 +38,12 @@ const SubmissionSchema = new Schema({
   jsonUrl: {
     type: String
   },
+  nftTokenId: {
+    type: String
+  },
+  nftContractAddress: {
+    type: String
+  },
   signature: {
     type: String,
     required: true

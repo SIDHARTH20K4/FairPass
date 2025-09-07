@@ -10,9 +10,9 @@ import React from "react";
 import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt } from "wagmi";
 import { parseEther, formatEther } from "viem";
 import { eventTicketABI } from "../../../../web3/constants";
-import QRTicket from "@/components/tickets/QRticket";
 import NFTDisplay from "@/components/tickets/NFTDisplay";
 import Toast from "@/components/Toast";
+import BlockchainNFTTicket from "@/components/BlockchainNFTTicket";
 import { createUserQR } from "@/Services/Semaphore";
 
 // Removed localStorage - using backend database only
@@ -85,14 +85,14 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     hash: transferTxHash,
   });
 
-  // Read resale info from smart contract
+  // Read resale info from smart contract (only for non-approval events)
   const { data: contractResaleInfo, refetch: refetchResaleInfo, isLoading: resaleInfoLoading } = useReadContract({
     address: event?.blockchainEventAddress as `0x${string}`,
     abi: eventTicketABI,
     functionName: 'getResaleInfo',
     args: mySub?.nftTokenId ? [BigInt(mySub.nftTokenId)] : undefined,
     query: {
-      enabled: !!(event?.blockchainEventAddress && mySub?.nftTokenId),
+      enabled: !!(event?.blockchainEventAddress && mySub?.nftTokenId && !event?.approvalNeeded && event?.price && event.price > 0),
     },
   });
 
@@ -547,12 +547,12 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     }
   }, [contractResaleInfo]);
 
-  // Fetch resale info when NFT data is available
+  // Fetch resale info when NFT data is available (only for non-approval paid events)
   useEffect(() => {
-    if (event?.blockchainEventAddress && mySub?.nftTokenId) {
+    if (event?.blockchainEventAddress && mySub?.nftTokenId && !event?.approvalNeeded && event?.price && event.price > 0) {
       fetchResaleInfo();
     }
-  }, [event?.blockchainEventAddress, mySub?.nftTokenId, fetchResaleInfo]);
+  }, [event?.blockchainEventAddress, mySub?.nftTokenId, event?.approvalNeeded, event?.price, fetchResaleInfo]);
 
   // Early return for loading states (after all hooks)
   if (eventLoading) {
@@ -771,7 +771,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                     });
                     return null;
                   })()}
-                  {myStatus === "approved" && mySub?.qrUrl ? (
+                  {myStatus === "approved" ? (
                     <div className="space-y-4">
                       {/* Simple Status */}
                       <div className="text-center">
@@ -783,8 +783,14 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                         </div>
                       </div>
                       
-                      {/* Simplified Ticket Display */}
-                      {event?.blockchainEventAddress ? (
+                      {/* Blockchain-based NFT Ticket Display */}
+                      {event?.blockchainEventAddress && address ? (
+                        <BlockchainNFTTicket 
+                          eventContractAddress={event.blockchainEventAddress} 
+                          userAddress={address}
+                          event={event}
+                        />
+                      ) : (
                         <div className="card p-4">
                           <div className="text-center space-y-3">
                             <div className="flex items-center justify-center gap-2">
@@ -817,19 +823,55 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                             </div>
                             
                             {/* Quick Info */}
-                            <div className="space-y-2 text-sm">
-                              <div className="flex justify-between">
-                                <span className="text-foreground/70">Event:</span>
-                                <span className="font-medium">{event.name}</span>
+                            <div className="space-y-3">
+                              {/* Ticket Header */}
+                              <div className="text-center pb-3 border-b border-gray-200 dark:border-gray-700">
+                                <div className="inline-flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/30 dark:to-purple-900/30 rounded-full">
+                                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m0 0a2 2 0 012 2v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9a2 2 0 012-2m0 0V7a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                  </svg>
+                                  <span className="text-sm font-medium text-blue-700 dark:text-blue-300">NFT TICKET</span>
+                                </div>
                               </div>
-                              <div className="flex justify-between">
-                                <span className="text-foreground/70">Participant:</span>
-                                <span className="font-medium">{mySub.values.name || 'Anonymous'}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-foreground/70">Status:</span>
-                                <span className="text-green-600 dark:text-green-400 font-medium">✓ Approved</span>
-                              </div>
+                              
+                              {/* Enhanced Event Details */}
+                              <div className="space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                  <span className="text-foreground/70">Event:</span>
+                                  <span className="font-medium">{event.name}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-foreground/70">Date:</span>
+                                  <span className="font-medium">{event.date}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-foreground/70">Time:</span>
+                                  <span className="font-medium">{event.time}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-foreground/70">Location:</span>
+                                  <span className="font-medium">{event.location}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-foreground/70">Participant:</span>
+                                  <span className="font-medium">{mySub.values.name || 'Anonymous'}</span>
+                                </div>
+                                {event.isPaid && event.price && (
+                                  <div className="flex justify-between">
+                                    <span className="text-foreground/70">Price Paid:</span>
+                                    <span className="font-medium text-green-600">{event.price} {event.currency || 'SONIC'}</span>
+                                  </div>
+                                )}
+                                <div className="flex justify-between">
+                                  <span className="text-foreground/70">Status:</span>
+                                  <span className="text-green-600 dark:text-green-400 font-medium">✓ Approved</span>
+                                </div>
+                                {mySub.nftTokenId && mySub.nftTokenId !== 'pending' && mySub.nftTokenId !== 'qr-generated' && (
+                                  <div className="flex justify-between">
+                                    <span className="text-foreground/70">Token ID:</span>
+                                    <span className="font-mono text-sm">#{mySub.nftTokenId}</span>
+                                  </div>
+                                )}
                               {event.blockchainEventAddress && (
                                 <div className="flex justify-between items-center">
                                   <span className="text-foreground/70">Contract:</span>
@@ -879,8 +921,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                 )}
                               </div>
                               
-                              {/* Resale Actions */}
-                              {event.blockchainEventAddress && (
+                              {/* Resale Actions - Only for NON-APPROVAL PAID events */}
+                              {event.blockchainEventAddress && !event.approvalNeeded && event.price && event.price > 0 && (
                                 <div className="flex gap-2">
                                   {resaleInfoLoading ? (
                                     <div className="flex-1 text-center text-sm text-foreground/60 py-2 px-3 bg-foreground/5 rounded-lg">
@@ -919,6 +961,18 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                       No resale data available
                                     </div>
                                   )}
+                                </div>
+                              )}
+                              
+                              
+                              {/* Message for APPROVAL events */}
+                              {event.blockchainEventAddress && event.approvalNeeded && (
+                                <div className="flex-1 text-center text-sm text-foreground/60 py-2 px-3 bg-foreground/5 rounded-lg">
+                                  <div className="flex items-center justify-center gap-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                    </svg>
+                                  </div>
                                 </div>
                               )}
                             </div>
@@ -981,63 +1035,44 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                                   </div>
                                 </div>
                               )}
-                      </div>
+                              </div>
+                              
+                              {/* Ticket Footer */}
+                              <div className="text-center pt-3 border-t border-gray-200 dark:border-gray-700">
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  🎫 Official NFT Event Ticket
+                                </span>
+                              </div>
+                            </div>
                       
                             {/* Action Buttons */}
-                            {event.blockchainEventAddress && (
-                              <div className="flex gap-2 pt-2">
-                                <a
-                                  href={`https://testnet.soniclabs.com/address/${event.blockchainEventAddress}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="btn-primary flex-1 text-sm"
-                                >
-                                  View NFT
-                                </a>
-                                <button
-                                  onClick={() => setShowTransferModal(true)}
-                                  className="btn-secondary flex-1 text-sm"
-                                  title="Transfer this NFT to another address"
-                                >
-                                  Transfer NFT
-                                </button>
-                        </div>
-                      )}
-                      
+                            <div className="space-y-2">
+                              {/* Primary Actions */}
+                              <div className="flex gap-2">
+                                {event.blockchainEventAddress && (
+                                  <>
+                                    <a
+                                      href={`https://testnet.soniclabs.com/address/${event.blockchainEventAddress}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="btn-primary flex-1 text-sm"
+                                    >
+                                      View NFT
+                                    </a>
+                                    <button
+                                      onClick={() => setShowTransferModal(true)}
+                                      className="btn-secondary flex-1 text-sm"
+                                      title="Transfer this NFT to another address"
+                                    >
+                                      Transfer NFT
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       )}
-                    </div>
-                  ) : myStatus === "approved" && !mySub?.qrUrl ? (
-                    <div className="space-y-4">
-                      {/* Simple Status */}
-                      <div className="text-center">
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          <span className="font-medium">Registration Approved</span>
-                        </div>
-                      </div>
-                      
-                      {/* Missing QR Message */}
-                      <div className="card p-4 text-center">
-                        <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                          <svg className="w-6 h-6 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                          </svg>
-                        </div>
-                        <p className="font-medium mb-2">QR Ticket Missing</p>
-                        <p className="text-sm text-foreground/70 mb-4">
-                          Generate your QR ticket to complete registration.
-                        </p>
-                        <button 
-                          onClick={regenerateQRData}
-                          className="btn-primary"
-                        >
-                          Generate QR Ticket
-                        </button>
-                      </div>
                     </div>
                   ) : myStatus === "pending" ? (
                     <div className="space-y-4">
@@ -1217,8 +1252,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      {/* Resale Modal */}
-      {showResaleModal && (
+      {/* Resale Modal - Only for NON-APPROVAL PAID events */}
+      {showResaleModal && !event?.approvalNeeded && event?.price && event.price > 0 && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-background border border-border rounded-lg p-6 w-full max-w-md">
             <div className="flex items-center justify-between mb-4">

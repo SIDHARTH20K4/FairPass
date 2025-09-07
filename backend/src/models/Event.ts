@@ -32,6 +32,10 @@ const EventSchema = new Schema<IEvent>({
     required: true,
     default: true
   },
+  allowResale: {
+    type: Boolean,
+    default: true
+  },
   date: {
     type: String,
     required: true

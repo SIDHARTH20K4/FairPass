@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import Submission from '../models/Submission';
 import Event from '../models/Event';
 import { SemaphoreService } from '../services/SemaphoreService';
@@ -12,19 +13,43 @@ import {
 const router = express.Router();
 
 // Get all registrations for an event
-router.get('/events/:eventId/registrations', async (req: Request<{ eventId: string }>, res: Response) => {
+router.get('/events/:eventId/registrations', async (req: Request<{ eventId: string }, {}, {}, { status?: string }>, res: Response) => {
   try {
     const { eventId } = req.params;
+    const { status } = req.query;
+    
+    console.log(`🔍 Fetching registrations for event ${eventId} with status: ${status}`);
+    
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      console.log(`❌ Invalid eventId format: ${eventId}`);
+      return res.status(400).json({ error: 'Invalid event ID format' });
+    }
     
     // Verify event exists
     const event = await Event.findById(eventId);
     if (!event) {
+      console.log(`❌ Event not found: ${eventId}`);
       return res.status(404).json({ error: 'Event not found' });
     }
     
-    const submissions = await Submission.find({ eventId })
+    console.log(`✅ Event found: ${event.name} (approvalNeeded: ${event.approvalNeeded})`);
+    
+    // Build query - convert eventId to ObjectId
+    const query: any = { 
+      eventId: new mongoose.Types.ObjectId(eventId) 
+    };
+    if (status) {
+      query.status = status;
+    }
+    
+    console.log(`🔍 Query for submissions:`, query);
+    
+    const submissions = await Submission.find(query)
       .sort({ createdAt: -1 })
       .lean();
+    
+    console.log(`📋 Found ${submissions.length} submissions:`, submissions);
     
     const submissionsWithId: SubmissionResponse[] = submissions.map(submission => ({
       ...submission,
@@ -126,7 +151,7 @@ router.patch('/events/:eventId/registrations/:submissionId', async (
 ) => {
   try {
     const { eventId, submissionId } = req.params;
-    const { status, qrCid, qrUrl, jsonCid, jsonUrl } = req.body;
+    const { status, qrCid, qrUrl, jsonCid, jsonUrl, nftTokenId, nftContractAddress } = req.body;
     
     // Verify event exists
     const event = await Event.findById(eventId);
@@ -156,6 +181,10 @@ router.patch('/events/:eventId/registrations/:submissionId', async (
         // This happens in the SemaphoreService.createEventGroup method
       }
     }
+    
+    // Add NFT data (can be updated regardless of status)
+    if (nftTokenId) updateData.nftTokenId = nftTokenId;
+    if (nftContractAddress) updateData.nftContractAddress = nftContractAddress;
     
     const submission = await Submission.findByIdAndUpdate(
       submissionId,

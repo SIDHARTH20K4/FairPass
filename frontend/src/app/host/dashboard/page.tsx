@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { apiGetOrganizationEvents, apiUpdateEventStatus, apiGetEventsRegistrationCounts, apiUpdateEvent } from "@/lib/api";
 import MobileSidebar from "@/components/MobileSidebar";
+import NotificationBell from "@/components/NotificationBell";
+import QRScanner from "@/components/QRScanner";
 import { useEventFactory } from "@/hooks/useWeb3";
 import { EventType } from "../../../../web3/factoryConnections";
 import { parseEther } from "viem";
@@ -55,6 +57,8 @@ export default function HostDashboardPage() {
     transactionHash: string;
   } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [selectedEventForScanning, setSelectedEventForScanning] = useState<HostEvent | null>(null);
 
   useEffect(() => {
     if (!authLoading && isAuthenticated && organization) {
@@ -143,13 +147,15 @@ export default function HostDashboardPage() {
       setBlockchainEventAddress(null);
 
       // Determine event type based on event data
+      // Note: APPROVAL type is only for free approval-based events
+      // Paid events with approval are still PAID type (approval handled by frontend)
       let eventType: EventType;
-      if (event.approvalNeeded) {
-        eventType = EventType.APPROVAL;
-      } else if (event.isPaid && event.price) {
-        eventType = EventType.PAID;
+      if (event.isPaid && event.price) {
+        eventType = EventType.PAID;  // Paid events (with or without approval)
+      } else if (event.approvalNeeded && !event.isPaid) {
+        eventType = EventType.APPROVAL;  // Free approval-based events only
       } else {
-        eventType = EventType.FREE;
+        eventType = EventType.FREE;  // Free events without approval
       }
 
       // Convert price to wei if paid event
@@ -329,6 +335,31 @@ export default function HostDashboardPage() {
     router.push('/host/signin');
   }
 
+  // Handle QR Scanner
+  const openQRScanner = (event: HostEvent) => {
+    if (!event.blockchainEventAddress) {
+      alert('This event needs to be published to the blockchain first before scanning tickets.');
+      return;
+    }
+    setSelectedEventForScanning(event);
+    setShowQRScanner(true);
+  };
+
+  const closeQRScanner = () => {
+    setShowQRScanner(false);
+    setSelectedEventForScanning(null);
+  };
+
+  const handleScanSuccess = (result: any) => {
+    console.log('Scan successful:', result);
+    // Handle successful scan - could show participant details, etc.
+  };
+
+  const handleScanError = (error: string) => {
+    console.error('Scan error:', error);
+    // Handle scan error
+  };
+
   if (authLoading) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-12">
@@ -367,40 +398,17 @@ export default function HostDashboardPage() {
             <p className="text-foreground/60">Manage your events and organization</p>
           </div>
           <div className="flex items-center gap-3">
-          <button 
-            onClick={loadEvents} 
-            disabled={loading}
-            className="btn-secondary flex items-center gap-2 px-3 py-2 min-w-[120px]"
-            title="Refresh events"
-          >
-            {loading ? (
-              <div className="w-4 h-4 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin"></div>
-            ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            )}
-            <span className="hidden sm:inline">Refresh</span>
-          </button>
-          
+          {/* Notification Bell */}
+          <NotificationBell />
 
-          <Link href="/host/qr-scanner" className="btn-secondary flex items-center gap-2 px-3 py-2 min-w-[120px]">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            <span>QR Scanner</span>
-          </Link>
-
-
-          <button onClick={navigateToCreateEvent} className="btn-primary flex items-center gap-2 px-3 py-2 min-w-[120px]">
+          <button onClick={navigateToCreateEvent} className="btn-primary flex items-center gap-2 px-4 py-2">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             <span>Create Event</span>
           </button>
           
-          <button onClick={handleLogout} className="btn-secondary border-destructive/20 text-destructive hover:bg-destructive/5 flex items-center gap-2 px-3 py-2 min-w-[120px]">
+          <button onClick={handleLogout} className="btn-secondary border-destructive/20 text-destructive hover:bg-destructive/5 flex items-center gap-2 px-4 py-2">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
@@ -415,8 +423,6 @@ export default function HostDashboardPage() {
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onLogout={handleLogout}
-        onRefresh={loadEvents}
-        loading={loading}
       />
 
       {/* Organization Information Section */}
@@ -503,88 +509,6 @@ export default function HostDashboardPage() {
         )}
       </div>
 
-      {/* Blockchain Integration Section */}
-      <div className="mb-8 card p-6 fade-in">
-        <h2 className="text-xl font-semibold mb-6 text-foreground">Blockchain Integration</h2>
-        <div className="space-y-4">
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">Smart Contract Features</h4>
-                <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
-                  Enable blockchain features for your events to get NFT tickets, resale marketplace, and secure ownership verification.
-                </p>
-                <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-                  <li>• NFT tickets with unique metadata</li>
-                  <li>• Resale marketplace (up to 3 times)</li>
-                  <li>• Platform fee: 1% on resales</li>
-                  <li>• Secure ownership verification</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-          
-          {!isConnected ? (
-            <div className="text-center py-6">
-              <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-              </div>
-              <p className="text-foreground/70 mb-4">Connect your wallet to enable blockchain features</p>
-              <button className="btn-primary">
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-                Connect Wallet
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="font-medium text-foreground">Wallet Connected</span>
-                </div>
-                <div className="text-xs text-foreground/60 font-mono bg-foreground/5 px-2 py-1 rounded">
-                  {address?.slice(0, 6)}...{address?.slice(-4)}
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {isInitialized ? (
-                    <>
-                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                      <span className="font-medium text-foreground">EventFactory Ready</span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
-                      <span className="font-medium text-foreground">Initializing...</span>
-                    </>
-                  )}
-                </div>
-              </div>
-              
-              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span className="font-medium text-green-900 dark:text-green-100">Ready to Publish Events</span>
-                </div>
-                <p className="text-sm text-green-800 dark:text-green-200">
-                  You can now publish your draft events to deploy them as smart contracts on the blockchain.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* Events Summary Section */}
       {events.length > 0 && (
@@ -675,105 +599,151 @@ export default function HostDashboardPage() {
             ) : (
               <div className="space-y-4">
                 {events.filter(e => e.status === 'draft').map((e, index) => (
-                  <div key={e.id} className="card p-6 slide-in" style={{ animationDelay: `${index * 100}ms` }}>
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="min-w-0 flex-1 space-y-3">
-                        <div className="text-lg font-semibold text-foreground">{e.name}</div>
-                        <div className="text-sm text-foreground/60">{new Date(e.updatedAt).toLocaleString()}</div>
-                        {/* Approval Status Indicator */}
-                        {e.approvalNeeded && (
-                          <div className="flex items-center gap-2 text-sm text-warning">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                            </svg>
-                            <span>Approval Required</span>
-                          </div>
-                        )}
-                        {/* Participant Count */}
-                        <div className="flex items-center gap-2 text-sm text-foreground/70">
-                          <div className="w-2 h-2 rounded-full bg-foreground/40"></div>
+                  <div key={e.id} className="card p-6 slide-in hover:shadow-lg transition-all duration-300" style={{ animationDelay: `${index * 100}ms` }}>
+                    {/* Header Section */}
+                    <div className="flex items-start justify-between mb-6">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-xl font-semibold text-foreground truncate mb-1">{e.name}</h3>
+                        <div className="flex items-center gap-2 text-sm text-foreground/60">
+                          <span>{new Date(e.updatedAt).toLocaleDateString()}</span>
+                          <div className="w-1 h-1 rounded-full bg-foreground/40"></div>
                           {loadingCounts ? (
                             <span className="text-foreground/40">Loading participants...</span>
                           ) : (
                             <span>{participantCounts[e.id] || 0} participants</span>
                           )}
                         </div>
-                        
-                        {/* Contract Address */}
-                        {e.blockchainEventAddress ? (
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              <span className="text-xs font-medium">Contract Deployed</span>
-                            </div>
-                            <div className="bg-foreground/5 rounded-lg p-3 border border-foreground/10">
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs text-foreground/70 font-medium">Contract Address:</span>
-                                <button
-                                  onClick={() => copyToClipboard(e.blockchainEventAddress!, 'Contract address')}
-                                  className="text-foreground/60 hover:text-foreground transition-colors"
-                                >
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                  </svg>
-                                </button>
-                              </div>
-                              <p className="font-mono text-xs text-foreground break-all">
-                                {e.blockchainEventAddress}
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                            </svg>
-                            <span className="text-xs">Not deployed to blockchain</span>
-                          </div>
-                        )}
                       </div>
-                      <div className="flex items-center gap-3 ml-6">
-                        <span className="px-3 py-1 rounded-full text-xs font-medium glass border border-foreground/10">
+                      <div className="flex items-center gap-2 ml-4">
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-foreground/10 text-foreground/80">
                           Draft
                         </span>
-                        {!isConnected ? (
-                          <div className="text-sm text-orange-600 dark:text-orange-400">
-                            Connect wallet to publish
+                      </div>
+                    </div>
+
+                    {/* Event Details Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                      {/* Event Type */}
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium text-foreground/70">Event Type</h4>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                          <span className="text-sm text-foreground">
+                            {e.price && e.price > 0 ? 'Paid' : 'Free'}
+                            {e.approvalNeeded ? ' + Approval' : ''}
+                            {e.allowResale && !e.approvalNeeded ? ' + Resale' : ''}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Blockchain Status */}
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium text-foreground/70">Blockchain Status</h4>
+                        {e.blockchainEventAddress ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                            <span className="text-sm text-green-600 dark:text-green-400">Contract Deployed</span>
                           </div>
                         ) : (
-                          <button 
-                            onClick={() => publishEvent(e)}
-                            disabled={publishingEvent === e.id || !isConnected}
-                            className="btn-primary text-sm px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {publishingEvent === e.id ? 'Publishing...' : 'Publish'}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                            <span className="text-sm text-orange-600 dark:text-orange-400">Not deployed to blockchain</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Contract Address */}
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium text-foreground/70">Contract Address</h4>
+                        {e.blockchainEventAddress ? (
+                          <div className="bg-foreground/5 rounded-lg p-3 border border-foreground/10">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs text-foreground/70 font-medium">Address:</span>
+                              <button
+                                onClick={() => copyToClipboard(e.blockchainEventAddress!, 'Contract address')}
+                                className="text-foreground/60 hover:text-foreground transition-colors p-1 rounded hover:bg-foreground/5"
+                                title="Copy address"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                              </button>
+                            </div>
+                            <p className="font-mono text-xs text-foreground break-all leading-relaxed">
+                              {e.blockchainEventAddress}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="bg-foreground/5 rounded-lg p-3 border border-foreground/10">
+                            <p className="text-xs text-foreground/40 italic">No contract deployed</p>
+                          </div>
                         )}
                       </div>
                     </div>
-                    
-                    {/* Event Preview */}
-                    <div className="mb-4 p-4 glass rounded-lg">
-                      {e.eventDescription ? (
-                        <div className="line-clamp-2 text-foreground/80">{e.eventDescription}</div>
-                      ) : (
-                        <div className="text-foreground/40 italic">No description</div>
-                      )}
+
+                    {/* Event Description */}
+                    <div className="mb-6">
+                      <h4 className="text-sm font-medium text-foreground/70 mb-2">Description</h4>
+                      <div className="bg-foreground/5 rounded-lg p-4 border border-foreground/10">
+                        {e.eventDescription ? (
+                          <p className="text-sm text-foreground/80">{e.eventDescription}</p>
+                        ) : (
+                          <p className="text-sm text-foreground/40 italic">No description provided</p>
+                        )}
+                      </div>
                     </div>
-                    
-                    <div className="flex items-center gap-3">
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-wrap gap-3">
+                      {/* Publish Button */}
+                      {!isConnected ? (
+                        <div className="px-4 py-2 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
+                          <span className="text-sm text-orange-600 dark:text-orange-400">Connect wallet to publish</span>
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={() => publishEvent(e)}
+                          disabled={publishingEvent === e.id || !isConnected}
+                          className="btn-primary px-4 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                          {publishingEvent === e.id ? (
+                            <>
+                              <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                              Publishing...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                              </svg>
+                              Publish
+                            </>
+                          )}
+                        </button>
+                      )}
+
+                      {/* Edit Button */}
                       <Link 
-                        className="btn-secondary text-sm px-4 py-2" 
                         href={`/events/${e.id}/edit`}
+                        className="btn-secondary px-4 py-2 text-sm flex items-center gap-2"
                       >
-                        Edit Content
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        Edit
                       </Link>
+
+                      {/* Preview Button */}
                       <Link 
-                        className="btn-secondary text-sm px-4 py-2" 
                         href={`/events/${e.id}`}
+                        className="btn-secondary px-4 py-2 text-sm flex items-center gap-2"
                       >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
                         Preview
                       </Link>
                     </div>
@@ -904,83 +874,181 @@ export default function HostDashboardPage() {
               <div className="space-y-4">
                 {events.filter(e => e.status === 'published').map((e, index) => (
                   <div key={e.id} className="card p-6 slide-in" style={{ animationDelay: `${index * 100}ms` }}>
-                    <div className="flex items-center justify-between">
-                      <div className="min-w-0 flex-1 space-y-3">
-                        <div className="text-lg font-semibold text-foreground">{e.name}</div>
-                        <div className="text-sm text-foreground/60">{new Date(e.updatedAt).toLocaleString()}</div>
-                        {/* Participant Count */}
-                        <div className="flex items-center gap-2 text-sm text-foreground/70">
-                          <div className="w-2 h-2 rounded-full bg-foreground/40"></div>
-                          {loadingCounts ? (
-                            <span className="text-foreground/40">Loading participants...</span>
-                          ) : (
-                            <span>{participantCounts[e.id] || 0} participants</span>
+                    {/* Header Section */}
+                    <div className="flex items-start justify-between mb-6">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-xl font-semibold text-foreground">{e.name}</h3>
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                            Published
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-foreground/60">
+                          <span>{new Date(e.updatedAt).toLocaleDateString()}</span>
+                          <span>•</span>
+                          <span>
+                            {loadingCounts ? 'Loading...' : `${participantCounts[e.id] || 0} participants`}
+                          </span>
+                          {e.approvalNeeded && (
+                            <>
+                              <span>•</span>
+                              <span className="text-orange-600 dark:text-orange-400 font-medium">Approval Required</span>
+                            </>
                           )}
                         </div>
-                        
-                        {/* Contract Address */}
-                        {e.blockchainEventAddress ? (
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              <span className="text-xs font-medium">Contract Deployed</span>
-                            </div>
-                            <div className="bg-foreground/5 rounded-lg p-3 border border-foreground/10">
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs text-foreground/70 font-medium">Contract Address:</span>
-                                <button
-                                  onClick={() => copyToClipboard(e.blockchainEventAddress!, 'Contract address')}
-                                  className="text-foreground/60 hover:text-foreground transition-colors"
-                                >
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                  </svg>
-                                </button>
-                              </div>
-                              <p className="font-mono text-xs text-foreground break-all">
-                                {e.blockchainEventAddress}
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                            </svg>
-                            <span className="text-xs">Not deployed to blockchain</span>
-                          </div>
-                        )}
-              </div>
-                      <div className="flex items-center gap-3 ml-6">
-                        <span className="px-3 py-1 rounded-full text-xs font-medium glass border border-foreground/10">
-                          Published
-                        </span>
-                        <button 
-                          onClick={() => updateEventStatus(e.id, 'draft')}
-                          disabled={updatingStatus === e.id}
-                          className="btn-secondary text-sm px-4 py-2"
-                        >
-                          {updatingStatus === e.id ? 'Unpublishing...' : 'Unpublish'}
-                        </button>
-                        <Link className="btn-secondary text-sm px-4 py-2" href={`/events/${e.id}/edit`}>Edit</Link>
-                        <Link className="btn-primary text-sm px-4 py-2" href={`/events/${e.id}`}>View</Link>
-                        {/* Approve Participants Button - Only for approval-based events */}
-                        {e.approvalNeeded && (
-                          <Link 
-                            className="btn-primary text-sm px-4 py-2 bg-success hover:bg-success/80" 
-                            href={`/events/${e.id}/review`}
-                          >
-                            Approve Participants
-                          </Link>
-                        )}
                       </div>
                     </div>
-              </div>
+
+                    {/* Event Details Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                      {/* Event Type & Pricing */}
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-medium text-foreground/80">Event Type</h4>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                          <span className="text-sm text-foreground">
+                            {e.isPaid ? `Paid (${e.price} ${e.currency})` : 'Free'}
+                            {e.allowResale && ' + Resale'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Contract Status */}
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-medium text-foreground/80">Blockchain Status</h4>
+                        {e.blockchainEventAddress ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                            <span className="text-sm text-green-600 dark:text-green-400">Contract Deployed</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                            <span className="text-sm text-orange-600 dark:text-orange-400">Not Deployed</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Contract Address */}
+                      {e.blockchainEventAddress && (
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-medium text-foreground/80">Contract Address</h4>
+                          <div className="flex items-center gap-2">
+                            <code className="text-xs font-mono text-foreground/70 bg-foreground/5 px-2 py-1 rounded flex-1 truncate">
+                              {e.blockchainEventAddress.slice(0, 6)}...{e.blockchainEventAddress.slice(-4)}
+                            </code>
+                            <button
+                              onClick={() => copyToClipboard(e.blockchainEventAddress!, 'Contract address')}
+                              className="text-foreground/60 hover:text-foreground transition-colors p-1 rounded hover:bg-foreground/5"
+                              title="Copy full address"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-wrap gap-3">
+                      <Link 
+                        href={`/events/${e.id}`}
+                        className="btn-primary px-3 py-2 text-sm flex items-center gap-2"
+                        title="View Event"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        <span className="hidden sm:inline">View Event</span>
+                      </Link>
+                      
+                      <Link 
+                        href={`/events/${e.id}/edit`}
+                        className="btn-secondary px-3 py-2 text-sm flex items-center gap-2"
+                        title="Edit Event"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        <span className="hidden sm:inline">Edit</span>
+                      </Link>
+                      
+                      <button 
+                        onClick={() => updateEventStatus(e.id, 'draft')}
+                        disabled={updatingStatus === e.id}
+                        className="btn-secondary px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        title="Unpublish Event"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        <span className="hidden sm:inline">
+                          {updatingStatus === e.id ? 'Unpublishing...' : 'Unpublish'}
+                        </span>
+                      </button>
+                      
+                      {e.approvalNeeded && (
+                        <Link 
+                          href={`/events/${e.id}/review`}
+                          className="btn-primary px-3 py-2 text-sm bg-orange-600 hover:bg-orange-700 flex items-center gap-2"
+                          title="Approve Participants"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="hidden sm:inline">Approve Participants</span>
+                        </Link>
+                      )}
+                      
+                      {e.blockchainEventAddress && (
+                        <button
+                          onClick={() => openQRScanner(e)}
+                          className="btn-primary px-3 py-2 text-sm bg-purple-600 hover:bg-purple-700 flex items-center gap-2"
+                          title="QR Scanner"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <span className="hidden sm:inline">QR Scanner</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
           ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* QR Scanner Modal */}
+      {showQRScanner && selectedEventForScanning && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="relative max-w-lg w-full">
+            {/* Close Button */}
+            <button
+              onClick={closeQRScanner}
+              className="absolute -top-2 -right-2 w-8 h-8 bg-white dark:bg-gray-800 rounded-full flex items-center justify-center shadow-lg z-10 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            
+            {/* Scanner Component */}
+            <QRScanner
+              eventContractAddress={selectedEventForScanning.blockchainEventAddress!}
+              event={{
+                date: selectedEventForScanning.date,
+                name: selectedEventForScanning.name
+              }}
+              onScanSuccess={handleScanSuccess}
+              onScanError={handleScanError}
+            />
           </div>
         </div>
       )}

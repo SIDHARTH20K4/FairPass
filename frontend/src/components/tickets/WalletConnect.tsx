@@ -25,7 +25,7 @@ export default function WalletConnect({ onAddressChange, className = "" }: Walle
       <div className={`flex items-center gap-3 ${className}`}>
         <div className="flex items-center gap-2 px-3 py-2 glass rounded-lg">
           <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-          <span className="text-sm font-mono text-foreground/80">
+          <span className="text-sm font-mono text-gray-700 dark:text-foreground/80">
             {address.slice(0, 6)}...{address.slice(-4)}
           </span>
         </div>
