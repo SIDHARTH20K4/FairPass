@@ -35,12 +35,26 @@ Tickets are NFTs with on-chain ownership, reselling controls, and automatic burn
 ---
 
 ## 🔗 Smart Contract
-**EventImplementation.sol ABI:** [View ABI](contracts/EventImplementation.json)  
+**EventFactory.sol CA:** 0x9016F1b7DA5C91d6479aAF99A8765Cb4ED0668bE  
 Main Functions:  
 - `buyTicket()` → Mint new ticket  
 - `checkIn()` → Burn ticket after entry  
 - `mintForUser()` → Organizer batch minting  
 - `ownerOfNFT()` → Verify ticket ownership  
+
+🔗 Smart Contract
+EventFactory.sol
+
+**CA:** 0x9016F1b7DA5C91d6479aAF99A8765Cb4ED0668bE
+
+Main Functions:
+-`createEvent()` → Deploys a new EventImplementation contract.
+
+-`getAllEvents`() → Returns list of all deployed events.
+
+-`getEventDetails`(eventId) → Fetch event metadata (name, date, venue, etc.).
+
+-`setFeePolicy`() → Define fee/commission (e.g., Sonic’s 90% gas return).
 
 ---
 
