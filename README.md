@@ -43,19 +43,63 @@ Main Functions:
 - `ownerOfNFT()` → Verify ticket ownership  
 
 ## 🔗 Smart Contract
-**EventFactory.sol**
+---
 
-**CA:** 0x9016F1b7DA5C91d6479aAF99A8765Cb4ED0668bE
+## 🏗️ EventImplementation.sol
+Main contract for event logic.
 
-Main Functions:
--`createEvent()` → Deploys a new EventImplementation contract.
+### 🔑 Core Functionalities
+- **Constructor** → Initializes event (name, type, price, organizer, platform).  
+- **buyTicket(string metadataURI)** → Users buy tickets; NFT minted.  
+- **mintForUser(address user, string metadataURI)** → Organizer mints tickets directly (batch/lazy minting).  
+- **checkIn(uint256 tokenId)** → Burns ticket at event entry to prevent reuse.  
+- **ownerOfNFT(uint256 tokenId)** → Fetches NFT owner.  
+- **registerMe()** → Organizer registers themselves.  
+- **Ownership Functions** → `owner()`, `transferOwnership()`, `renounceOwnership()`.  
 
--`getAllEvents`() → Returns list of all deployed events.
+---
 
--`getEventDetails`(eventId) → Fetch event metadata (name, date, venue, etc.).
+## 🎟️ EventTicket.sol
+ERC-721 NFT contract for ticket representation.
 
--`setFeePolicy`() → Define fee/commission (e.g., Sonic’s 90% gas return).
+### 🔑 Core Functionalities
+- **mint(address to, string metadataURI)** → Creates a new NFT ticket.  
+- **burn(uint256 tokenId)** → Destroys NFT (used after check-in).  
+- **ownerOf(uint256 tokenId)** → Returns ticket owner.  
+- **tokenURI(uint256 tokenId)** → Fetches ticket metadata (IPFS link).  
+- Supports **ERC-721 transfers** (`transferFrom`, `safeTransferFrom`).  
 
+---
+
+## 🌐 PlatformManager.sol
+Manages multiple events and revenue logic.
+
+### 🔑 Core Functionalities
+- **createEvent(...)** → Deploys a new `EventImplementation` contract for each event.  
+- **getAllEvents()** → Returns list of deployed event contracts.  
+- **getEventDetails(eventAddress)** → Fetch event details.  
+
+### 💰 Fee Model
+- **Ticket Revenue** → Goes to organizer.  
+- **Resale Fee** → Platform + organizer share.  
+- **Sonic Gas Refund** → 90% of gas fees returned to smart contract owner.  
+
+---
+
+## 🔄 Ticket Lifecycle
+1. **Mint/Buy** → User mints ticket NFT.  
+2. **Resell/Transfer** → Possible via contract logic, with fees enforced.  
+3. **Check-In** → At event, ticket burned to prevent screenshot fraud.  
+4. **Completion** → No further use after burning.  
+
+---
+
+## 🧩 Example Flow
+1. Organizer creates event via **PlatformManager**.  
+2. Users buy tickets using **EventImplementation**.  
+3. NFTs minted by **EventTicket** contract.  
+4. At venue, user calls **checkIn** → NFT is burned.  
+5. Resale generates fees shared by platform & organizer.  
 ---
 
 ## 💰 Monetization
