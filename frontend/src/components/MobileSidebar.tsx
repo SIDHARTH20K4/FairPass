@@ -8,11 +8,9 @@ interface MobileSidebarProps {
   isOpen: boolean;
   onClose: () => void;
   onLogout: () => void;
-  onRefresh: () => void;
-  loading: boolean;
 }
 
-export default function MobileSidebar({ isOpen, onClose, onLogout, onRefresh, loading }: MobileSidebarProps) {
+export default function MobileSidebar({ isOpen, onClose, onLogout }: MobileSidebarProps) {
   if (!isOpen) return null;
 
   return (

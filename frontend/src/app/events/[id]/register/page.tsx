@@ -3,16 +3,24 @@
 import { apiGetEvent } from "@/lib/api";
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAccount, useSignMessage, useWriteContract, useWaitForTransactionReceipt, useSendTransaction } from "wagmi";
 import CustomDatePicker from "@/components/DatePicker";
 import SimpleDatePicker from "@/components/SimpleDatePicker";
 import { uploadImageToIPFS, uploadJsonToIPFS } from "@/lib/ipfs";
 import { Identity } from "@semaphore-protocol/identity";
 import { createUserQR } from "@/Services/Semaphore";
-import QRTicket from "@/components/tickets/QRticket";
+import BlockchainNFTTicket from "@/components/BlockchainNFTTicket";
 import { parseEther } from "viem";
 import { eventImplementationABI, eventTicketABI } from "../../../../../web3/constants";
 import { web3Service } from "@/Services/Web3Service";
+import { 
+  useBuyTicket, 
+  useMintForUser, 
+  useTicketNFT, 
+  createEventHooks,
+  getContractAddressFromEvent 
+} from "../../../../../web3/implementationConnections";
 import React from "react";
 
 // Removed localStorage - using backend database only
@@ -29,11 +37,15 @@ type Submission = {
   qrUrl?: string;
   jsonCid?: string;
   jsonUrl?: string;
+  nftTokenId?: string;
+  nftContractAddress?: string;
   signature?: string;
 };
 
 export default function RegisterForEvent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = React.use(params);
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { address, isConnected } = useAccount();
   
   // Event state
@@ -59,15 +71,38 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
   const [nftTokenId, setNftTokenId] = useState<string | null>(null);
   const [nftError, setNftError] = useState<string | null>(null);
   const [nftContractAddress, setNftContractAddress] = useState<string | null>(null);
+  const [pendingQrUrl, setPendingQrUrl] = useState<string | null>(null); // Store QR URL for saving after mint
+  const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
+  const [pendingTokenId, setPendingTokenId] = useState<string | null>(null); // Store token ID for saving after mint
+  
+  // Handle URL parameters for payment step
+  useEffect(() => {
+    const step = searchParams.get('step');
+    if (step === 'payment') {
+      console.log('🔗 URL parameter detected: step=payment - setting payment step');
+      setPaymentStep('payment');
+    }
+  }, [searchParams]);
+  
+  // Dynamic contract hooks based on event
+  const contractAddress = getContractAddressFromEvent(event);
+  const eventHooks = contractAddress ? createEventHooks(contractAddress) : null;
+  
+  // Payment hooks (must be declared before useWaitForTransactionReceipt)
+  const { buyTicket, hash: buyTicketHash, isPending: isBuyTicketPending, error: buyTicketError } = useBuyTicket(contractAddress || '');
+  const { mintForUser, isPending: isMintForUserPending, error: mintForUserError } = useMintForUser(contractAddress || '');
+  
+  // NFT contract address hook
+  const { data: ticketNFTAddress } = useTicketNFT(contractAddress || '');
   
   // Web3 hooks for payment
   const { writeContract, data: paymentTxHash, isPending: isPaymentPending, error: paymentTxError } = useWriteContract();
   const { sendTransaction, data: directTxHash, isPending: isDirectPaymentPending, error: directTxError } = useSendTransaction();
   const { isLoading: isPaymentConfirming, isSuccess: isPaymentConfirmed } = useWaitForTransactionReceipt({
-    hash: paymentTxHash || directTxHash,
+    hash: paymentTxHash || directTxHash || buyTicketHash,
   });
 
-  // Web3 hooks for NFT minting
+  // Web3 hooks for NFT minting (fallback for direct contract calls)
   const { writeContract: writeNFTContract, data: nftTxHash, isPending: isNFTMinting, error: nftTxError } = useWriteContract({
     mutation: {
       onError: (error) => {
@@ -91,6 +126,12 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
         console.log('🔍 Loading event:', id);
         const eventData = await apiGetEvent(id);
         console.log('✅ Event loaded:', eventData);
+        console.log('🔍 Event price details:', {
+          isPaid: eventData.isPaid,
+          price: eventData.price,
+          priceType: typeof eventData.price,
+          currency: eventData.currency
+        });
         setEvent(eventData);
       } catch (error) {
         console.error('❌ Failed to load event:', error);
@@ -148,7 +189,11 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
             const tokenId = (decoded.args as any).tokenId;
             console.log('🎫 NFT Token ID:', tokenId);
             setNftTokenId(tokenId.toString());
+            setPendingTokenId(tokenId.toString()); // Store for database save
             setNftCreated(true); // Mark NFT as successfully created
+            
+            // Save QR URL and NFT data to database after successful NFT creation
+            await saveNFTDataToDatabase();
             
             // Verify NFT metadata
             if (nftContractAddress) {
@@ -162,7 +207,11 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
           } else {
             console.warn('⚠️ TicketMinted event not found in transaction logs');
             setNftTokenId('unknown');
+            setPendingTokenId('unknown'); // Store for database save
             setNftCreated(true); // Still mark as created even if we can't get token ID
+            
+            // Save QR URL and NFT data to database after successful NFT creation
+            await saveNFTDataToDatabase();
           }
         } catch (error) {
           console.error('❌ Failed to get NFT token ID:', error);
@@ -180,8 +229,41 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
       console.log('🎫 NFT transaction confirmed but no contract address, marking as created');
       setNftCreated(true);
       setNftTokenId('confirmed');
+      setPendingTokenId('confirmed'); // Store for database save
+      
+      // Save QR URL and NFT data to database after successful NFT creation
+      saveNFTDataToDatabase();
     }
   }, [isNFTCreated, nftTxHash, nftContractAddress]);
+
+  // Auto-redirect after successful NFT creation
+  useEffect(() => {
+    if (nftCreated && event?.blockchainEventAddress) {
+      // Start countdown
+      setRedirectCountdown(5);
+      
+      // Auto-redirect after 5 seconds
+      const timer = setTimeout(() => {
+        router.push(`/events/${id}`);
+      }, 5000);
+      
+      // Countdown timer
+      const countdownTimer = setInterval(() => {
+        setRedirectCountdown(prev => {
+          if (prev === null || prev <= 1) {
+            clearInterval(countdownTimer);
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      
+      return () => {
+        clearTimeout(timer);
+        clearInterval(countdownTimer);
+      };
+    }
+  }, [nftCreated, event?.blockchainEventAddress, router, id]);
 
   // Load existing registration from backend on mount
   useEffect(() => {
@@ -244,16 +326,15 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
       // Convert price to wei
       const priceInWei = parseEther(event.price.toString());
 
-      if (event?.blockchainEventAddress) {
-        // Event is published - call the contract
-        console.log('Paying via contract:', event.blockchainEventAddress);
-        writeContract({
-          address: event.blockchainEventAddress as `0x${string}`,
-          abi: eventImplementationABI,
-          functionName: 'buyTicket',
-          args: [address], // User address
-          value: priceInWei,
-        });
+      if (contractAddress) {
+        // Event is published - use dynamic hook
+        console.log('Paying via contract using dynamic hook:', contractAddress);
+        
+        // Generate metadata URI for the ticket
+        const metadataURI = `ipfs://${id}_${address}_${Date.now()}`;
+        
+        // Use the dynamic buyTicket hook
+        buyTicket(metadataURI, priceInWei);
       } else {
         // Event not published - send payment directly to organizer
         console.log('Paying directly to organizer:', event.hostAddress);
@@ -288,30 +369,115 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
     }
   }, [directTxHash]);
 
+  // Watch for dynamic hook payment completion
   useEffect(() => {
-    if (isPaymentConfirmed && paymentHash) {
-      setPaymentReceipt({ hash: paymentHash, confirmed: true });
+    if (buyTicketError) {
+      console.error('❌ Buy ticket error:', buyTicketError);
+      setPaymentError(buyTicketError.message || 'Payment failed');
+      setPaymentStep('payment');
+    }
+  }, [buyTicketError]);
+
+  // Watch for buyTicket transaction hash
+  useEffect(() => {
+    if (buyTicketHash) {
+      console.log('✅ Buy ticket transaction submitted:', buyTicketHash);
+      setPaymentHash(buyTicketHash);
+    }
+  }, [buyTicketHash]);
+
+  // Debug payment state changes
+  useEffect(() => {
+    console.log('🔍 Payment state debug:', {
+      paymentStep,
+      isPaymentConfirmed,
+      paymentHash,
+      buyTicketHash,
+      isPaymentConfirming
+    });
+  }, [paymentStep, isPaymentConfirmed, paymentHash, buyTicketHash, isPaymentConfirming]);
+
+  useEffect(() => {
+    if (isPaymentConfirmed && (paymentHash || buyTicketHash)) {
+      const confirmedHash = paymentHash || buyTicketHash;
+      setPaymentReceipt({ hash: confirmedHash, confirmed: true });
       setPaymentStep('success');
+      console.log('✅ Payment confirmed - setting payment step to success');
       // Proceed with registration after successful payment
       proceedWithRegistration();
     }
-  }, [isPaymentConfirmed, paymentHash]);
+  }, [isPaymentConfirmed, paymentHash, buyTicketHash]);
 
   // Proceed with registration after payment
   async function proceedWithRegistration() {
     // This will be called after successful payment
     try {
-      // Only create NFT ticket for published events
-      if (event?.blockchainEventAddress) {
-        await createNFTTicket();
-      }
-      
-      // Then proceed with regular registration
+      // For non-approved events, proceed with regular registration
+      if (!submitted) {
       await submitRegistration();
+      }
     } catch (error) {
       console.error('Error in proceedWithRegistration:', error);
-      // Still proceed with registration even if NFT creation fails
+      // For non-approved events, still proceed with registration
+      if (!submitted) {
       await submitRegistration();
+      }
+    }
+  }
+
+
+  // Save NFT data (QR URL, Token ID, Contract Address) to database after successful NFT creation
+  async function saveNFTDataToDatabase() {
+    if (!pendingQrUrl || !submitted?.id) {
+      console.log('⚠️ Cannot save NFT data: missing pendingQrUrl or submission ID');
+      return;
+    }
+
+    try {
+      console.log('💾 Saving NFT data to database...');
+      
+      const updatePayload: any = {
+        qrUrl: pendingQrUrl,
+        qrCid: 'generated-from-nft', // We could extract this from IPFS if needed
+      };
+
+      // Add NFT token ID if available
+      if (pendingTokenId) {
+        updatePayload.nftTokenId = pendingTokenId;
+        console.log('🎫 Including NFT Token ID:', pendingTokenId);
+      }
+
+      // Add NFT contract address if available
+      if (nftContractAddress) {
+        updatePayload.nftContractAddress = nftContractAddress;
+        console.log('📜 Including NFT Contract Address:', nftContractAddress);
+      }
+
+      const updateResponse = await fetch(`http://localhost:4000/api/events/${id}/registrations/${submitted.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatePayload)
+      });
+
+      if (updateResponse.ok) {
+        console.log('✅ NFT data saved to database successfully');
+        // Update local state to reflect the change
+        if (submitted) {
+          setSubmitted({
+            ...submitted,
+            qrUrl: pendingQrUrl,
+            ...(pendingTokenId && { nftTokenId: pendingTokenId }),
+            ...(nftContractAddress && { nftContractAddress })
+          });
+        }
+        // Clear pending data
+        setPendingQrUrl(null);
+        setPendingTokenId(null);
+      } else {
+        console.error('❌ Failed to save NFT data to database:', await updateResponse.text());
+      }
+    } catch (error) {
+      console.error('❌ Error saving NFT data to database:', error);
     }
   }
 
@@ -323,7 +489,7 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
       return;
     }
 
-    if (isNFTMinting) {
+    if (isNFTMinting || isBuyTicketPending) {
       console.log('NFT minting already in progress');
       return;
     }
@@ -334,34 +500,20 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
 
       console.log('🎫 Starting NFT creation process...');
 
-      let ticketContractAddress: string;
-
-      if (event?.blockchainEventAddress) {
-        // Event is published - get EventTicket contract address from EventImplementation
-        console.log('📋 Event is published, getting EventTicket contract address...');
-        const { readContract, getPublicClient } = await import('wagmi/actions');
-        const { config } = await import('@/app/config');
-        const client = getPublicClient(config);
-        
-        console.log('🔍 Getting EventTicket contract address from EventImplementation...');
-        ticketContractAddress = await client.readContract({
-          address: event.blockchainEventAddress as `0x${string}`,
-          abi: eventImplementationABI,
-          functionName: 'ticketNFT'
-        }) as string;
-        
-        console.log('✅ EventTicket contract address:', ticketContractAddress);
-      } else {
-        // Event is not published - we need to deploy a standalone EventTicket contract
-        console.log('📋 Event is not published, creating standalone EventTicket contract...');
-        // For now, we'll skip NFT creation for unpublished events
-        // In a full implementation, you would deploy a new EventTicket contract here
-        console.log('⚠️ NFT creation skipped for unpublished events');
+      if (!contractAddress) {
+        console.log('⚠️ NFT creation skipped - no contract address');
         setNftError('NFT creation only available for published events');
         return;
       }
-      
-      setNftContractAddress(ticketContractAddress);
+
+      // Use dynamic hook to get ticket NFT address
+      if (ticketNFTAddress && typeof ticketNFTAddress === 'string') {
+        console.log('✅ EventTicket contract address from hook:', ticketNFTAddress);
+        setNftContractAddress(ticketNFTAddress);
+      } else {
+        console.log('⏳ Waiting for ticket NFT address...');
+        return;
+      }
 
       // Generate Semaphore identity for this event
       const semaphoreData = createUserQR(id);
@@ -382,6 +534,9 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
       console.log('📤 Uploading QR code image to IPFS...');
       const qrImageUpload = await uploadImageToIPFS(qrDataUrl);
       console.log('✅ QR code image uploaded to IPFS:', qrImageUpload.url);
+      
+      // Store QR URL for saving after successful mint
+      setPendingQrUrl(qrImageUpload.url);
 
       // Create metadata for the NFT
       const metadata = {
@@ -420,18 +575,14 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
       console.log('🔗 Metadata URL:', metadataURI);
       console.log('🖼️ QR Image URL:', qrImageUpload.url);
 
-      // Mint the NFT using the EventImplementation contract's buyTicket function
+      // Mint the NFT using the dynamic buyTicket hook
       // This handles both FREE and PAID events automatically
-      console.log('🎨 Minting NFT via EventImplementation buyTicket...');
-      writeNFTContract({
-        address: event.blockchainEventAddress as `0x${string}`,
-        abi: eventImplementationABI,
-        functionName: 'buyTicket',
-        args: [metadataURI], // metadataURI
-        value: event.price ? parseEther(event.price.toString()) : BigInt(0) // Include payment for paid events
-      });
+      console.log('🎨 Minting NFT via dynamic buyTicket hook...');
+      
+      const priceInWei = event.price ? parseEther(event.price.toString()) : BigInt(0);
+      buyTicket(metadataURI, priceInWei);
 
-      console.log('✅ NFT minting transaction submitted');
+      console.log('✅ NFT minting transaction submitted via dynamic hook');
       // Don't set nftCreated here - wait for transaction confirmation
       setNftTokenId('pending'); // We'll update this when we get the token ID
 
@@ -516,10 +667,10 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
       // Encrypt the identity for secure storage (in production, use proper encryption)
       const encryptedIdentity = btoa(identity.toString()); // Simple base64 encoding
 
-      // Generate QR ticket data for all events (both free and paid)
-      // QR codes are needed for all approved registrations
-      if (status === "approved") {
-        console.log('🎫 Generating QR ticket for approved registration...');
+      // Generate QR ticket data only for FREE events
+      // Paid events should get QR codes after payment, not during registration
+      if (status === "approved" && !event?.isPaid) {
+        console.log('🎫 Generating QR ticket for FREE event registration...');
         const qrData = encodeURIComponent(JSON.stringify({ eventId: id, commitment }));
         const qrUrlData = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrData}`;
         console.log('📱 QR data:', { eventId: id, commitment });
@@ -612,12 +763,12 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
 
       setSubmitted(entry);
       
-      // After successful registration, mint NFT if event is published
-      if (event?.blockchainEventAddress) {
-        console.log('🎫 Registration successful, now minting NFT for published event...');
-        await createNFTTicket();
+      // For non-approval events, set payment step to success to show mint button
+      if (!needsApproval) {
+        console.log('📋 Non-approval event registration successful - showing mint button');
+        setPaymentStep('success');
       } else {
-        console.log('📋 Registration successful, but event is not published - no NFT minting');
+        console.log('📋 Registration successful - waiting for approval');
       }
     } catch (err: any) {
       alert(err?.message || "Registration failed");
@@ -635,7 +786,7 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
       const response = await fetch(`http://localhost:4000/api/events/${id}/registrations/user/${address.toLowerCase()}`);
       if (response.ok) {
         const data = await response.json();
-        if (data.status === 'approved' && data.qrUrl) {
+        if (data.status === 'approved') {
           // Update local submission with backend data
           const updatedSubmission = {
             ...submitted,
@@ -646,6 +797,16 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
             jsonCid: data.jsonCid
           };
           setSubmitted(updatedSubmission);
+          
+          // If this is a paid event and user was just approved, trigger payment flow
+          if (event?.isPaid && event?.price && !paymentReceipt) {
+            console.log('🎉 Registration approved for paid event - triggering payment flow');
+            setPaymentStep('payment');
+          } else if (!event?.isPaid) {
+            // For free events, show mint button after approval
+            console.log('🎉 Registration approved for free event - showing mint button');
+            setPaymentStep('success'); // Show success step with mint button
+          }
         }
       }
     } catch (error) {
@@ -653,7 +814,7 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
     } finally {
       setCheckingStatus(false);
     }
-  }, [address, submitted, id]);
+  }, [address, submitted, id, event, paymentReceipt]);
 
   // Check approval status periodically for pending registrations
   useEffect(() => {
@@ -737,6 +898,19 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
                   <p className="text-lg font-medium text-yellow-600">⏳ Approval Pending</p>
                   <p className="text-sm text-foreground/70">
                     Your registration has been submitted and is waiting for host approval.
+                    {event?.isPaid && event?.price && (
+                      <span className="block text-xs text-foreground/60 mt-1">
+                        Payment of {event.price} Sonic Tokens will be required after approval.
+                      </span>
+                    )}
+                    {!event?.isPaid && (
+                      <span className="block text-xs text-foreground/60 mt-1">
+                        {event?.blockchainEventAddress 
+                          ? "You can mint your NFT ticket after approval."
+                          : "Your ticket will be ready immediately after approval."
+                        }
+                      </span>
+                    )}
                   </p>
                   {checkingStatus ? (
                     <p className="text-xs text-foreground/60">Checking approval status...</p>
@@ -748,6 +922,13 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
                       Check Status
                     </button>
                   )}
+                </div>
+              ) : paymentStep === 'payment' && event?.isPaid && event?.price ? (
+                <div className="space-y-2">
+                  <p className="text-lg font-medium text-blue-600">💰 Payment Required</p>
+                  <p className="text-sm text-foreground/70">
+                    Your registration has been approved! Please complete payment to finalize your ticket.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -763,6 +944,20 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
                       <p className="text-lg font-medium text-blue-600">⏳ Minting NFT Ticket...</p>
                       <p className="text-sm text-foreground/70">
                         Your registration has been approved. Minting your NFT ticket...
+                      </p>
+                    </>
+                  ) : paymentStep === 'success' ? (
+                    <>
+                      <p className="text-lg font-medium text-green-600">✅ Registration Complete!</p>
+                      <p className="text-sm text-foreground/70">
+                        Your registration has been approved and is now complete! You can attend the event.
+                      </p>
+                    </>
+                  ) : event?.isPaid && event?.price ? (
+                    <>
+                      <p className="text-lg font-medium text-orange-600">💰 Payment Required</p>
+                      <p className="text-sm text-foreground/70">
+                        Your registration has been approved! Please complete payment to finalize your ticket.
                       </p>
                     </>
                   ) : (
@@ -783,56 +978,381 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
             </div>
           </div>
 
-          {/* NFT Ticket Information */}
-          {nftCreated && event?.blockchainEventAddress && (
-            <div className="card p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-              <div className="flex items-center gap-2 mb-3">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-                <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">NFT Ticket Created</h3>
+          {/* Payment Step for Approved Paid Events */}
+          {submitted.status === "approved" && paymentStep === 'payment' && event?.isPaid && event?.price && (
+            <div className="space-y-6">
+              <div className="card p-6 text-center">
+                <h3 className="text-lg font-semibold mb-4">Payment Required</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="text-2xl font-bold text-foreground">{event.price}</span>
+                    <div className="flex items-center gap-2 px-3 py-1 bg-foreground/5 rounded-lg border border-foreground/10">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <span className="text-sm font-medium text-foreground">Sonic Tokens</span>
+                    </div>
+                  </div>
+                  <p className="text-sm text-foreground/70">
+                    Pay {event.price} Sonic Tokens to complete your registration and receive your ticket
+                  </p>
+                  {!event?.blockchainEventAddress && (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <p className="text-sm text-blue-800 dark:text-blue-200">
+                        💡 This event hasn't been published to the blockchain yet. Payment will be sent directly to the organizer's wallet.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
-              <p className="text-xs text-blue-700 dark:text-blue-300 mb-2">
-                Your event ticket has been minted as an NFT on the blockchain with ZK-based QR code!
-              </p>
-              <div className="text-xs text-blue-600 dark:text-blue-400">
-                <p>Contract: {event.blockchainEventAddress}</p>
-                {nftTokenId && nftTokenId !== 'pending' && (
-                  <p>Token ID: {nftTokenId}</p>
+              
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setPaymentStep('form')}
+                  className="btn-secondary flex-1"
+                >
+                  Back to Details
+                </button>
+                <button 
+                  onClick={handlePayment}
+                  disabled={isPaymentPending || isDirectPaymentPending || isBuyTicketPending}
+                  className="btn-primary flex-1"
+                >
+                  {(isPaymentPending || isDirectPaymentPending || isBuyTicketPending) ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin mr-2"></div>
+                      Processing Payment...
+                    </>
+                  ) : (
+                    "Pay with Sonic Tokens"
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Payment Processing for Approved Events */}
+          {submitted.status === "approved" && paymentStep === 'processing' && event?.isPaid && event?.price && (
+            <div className="card p-6 text-center">
+              <div className="space-y-4">
+                <div className="w-12 h-12 border-4 border-foreground/20 border-t-foreground rounded-full animate-spin mx-auto"></div>
+                <h3 className="text-lg font-semibold">Processing Payment</h3>
+                <p className="text-sm text-foreground/70">
+                  Please confirm the transaction in your wallet
+                </p>
+                {paymentHash && (
+                  <div className="mt-4 p-3 bg-foreground/5 rounded-lg">
+                    <p className="text-xs text-foreground/60 mb-1">Transaction Hash:</p>
+                    <p className="font-mono text-xs text-foreground break-all">{paymentHash}</p>
+                  </div>
                 )}
               </div>
             </div>
           )}
 
-          {/* QR Ticket Display for Approved Users */}
-          {submitted.status === "approved" && (
-            <>
-              {/* Regular QR Ticket for unpublished events or when no NFT */}
-              {submitted.qrUrl && !(nftCreated && event?.blockchainEventAddress) && (
-                <QRTicket
-                  qrUrl={submitted.qrUrl}
-                  eventName={event.name}
-                  participantName={submitted.values.name || 'Anonymous'}
-                  participantAddress={submitted.address || ''}
-                  approvalDate={new Date().toISOString()}
-                  isNFTMinted={false}
-                />
-              )}
-              
-              {/* NFT QR Ticket for published events */}
-              {nftCreated && event?.blockchainEventAddress && (
-                <QRTicket
-                  qrUrl="NFT_MINTED"
-                  eventName={event.name}
-                  participantName={submitted.values.name || 'Anonymous'}
-                  participantAddress={submitted.address || ''}
-                  approvalDate={new Date().toISOString()}
-                  isNFTMinted={true}
-                  nftTokenId={nftTokenId || undefined}
-                  nftContractAddress={nftContractAddress || undefined}
-                />
-              )}
-            </>
+          {/* Payment Success for Approved Events */}
+          {submitted.status === "approved" && paymentStep === 'success' && event?.isPaid && event?.price && (
+            <div className="card p-6 text-center">
+              <div className="space-y-4">
+                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-green-600">Payment Successful!</h3>
+                <p className="text-sm text-foreground/70">
+                  Your payment has been confirmed. You can now mint your NFT QR ticket.
+                </p>
+                <div className="text-xs text-foreground/50">
+                  Debug: Payment Step = {paymentStep} | Event isPaid = {event?.isPaid?.toString()} | Price = {event?.price}
+                </div>
+                
+                {/* Mint NFT Button for Paid Events */}
+                {!nftCreated && !nftCreating && !isNFTMinting && !isBuyTicketPending && (
+                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="text-center">
+                      <p className="text-sm text-blue-600 dark:text-blue-400 mb-3">
+                        Ready to create your NFT QR ticket?
+                      </p>
+                      <button
+                        onClick={createNFTTicket}
+                        disabled={nftCreating || isNFTMinting || isBuyTicketPending}
+                        className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {nftCreating || isNFTMinting || isBuyTicketPending ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            Creating NFT...
+                          </div>
+                        ) : (
+                          'Mint NFT QR Ticket'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* NFT QR Code Status */}
+                {nftCreating || isNFTMinting || isBuyTicketPending ? (
+                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center justify-center gap-2 mb-3">
+                      <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                      <p className="text-sm text-blue-600 dark:text-blue-400">Creating NFT QR Ticket...</p>
+                    </div>
+                    {(isNFTMinting || isBuyTicketPending) && (
+                      <p className="text-xs text-blue-500 dark:text-blue-300 text-center">Minting on blockchain...</p>
+                    )}
+                    {isNFTConfirming && (
+                      <p className="text-xs text-blue-500 dark:text-blue-300 text-center">Waiting for confirmation...</p>
+                    )}
+                  </div>
+                ) : nftCreated ? (
+                  <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                    <div className="flex items-center justify-center gap-2 mb-3">
+                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <p className="text-sm text-green-600 dark:text-green-400">NFT QR Ticket Created!</p>
+                    </div>
+                    <p className="text-xs text-green-700 dark:text-green-300 text-center mb-4">
+                      Your blockchain NFT ticket with QR code has been successfully minted.
+                    </p>
+                    
+                    {/* Minted Ticket Display */}
+                    <div className="mt-4 p-4 bg-white dark:bg-gray-800 rounded-lg border-2 border-dashed border-green-300 dark:border-green-600">
+                      <div className="text-center">
+                        <div className="mb-4">
+                          <div className="inline-flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/30 rounded-full">
+                            <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m0 0a2 2 0 012 2v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9a2 2 0 012-2m0 0V7a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                            </svg>
+                            <span className="text-sm font-medium text-green-700 dark:text-green-300">NFT TICKET</span>
+                          </div>
+                        </div>
+                        
+                        <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">{event.name}</h4>
+                        <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                          <p><span className="font-medium">Date:</span> {event.date}</p>
+                          <p><span className="font-medium">Time:</span> {event.time}</p>
+                          <p><span className="font-medium">Location:</span> {event.location}</p>
+                          <p><span className="font-medium">Participant:</span> {values.name || 'Anonymous'}</p>
+                          {nftTokenId && nftTokenId !== 'pending' && nftTokenId !== 'qr-generated' && (
+                            <p><span className="font-medium">Token ID:</span> #{nftTokenId}</p>
+                          )}
+                        </div>
+                        
+                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                            This NFT serves as your official event ticket
+                          </p>
+                          {nftContractAddress && (
+                            <p className="text-xs font-mono text-gray-400 dark:text-gray-500 break-all">
+                              Contract: {nftContractAddress}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : nftError ? (
+                  <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      <p className="text-sm text-red-600 dark:text-red-400">NFT Creation Failed</p>
+                    </div>
+                    <p className="text-xs text-red-600 dark:text-red-400 text-center mb-2">{nftError}</p>
+                    <button
+                      onClick={createNFTTicket}
+                      disabled={nftCreating || isNFTMinting || isBuyTicketPending}
+                      className="btn-primary text-xs px-3 py-1 w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Retry NFT Creation
+                    </button>
+                  </div>
+                ) : null}
+
+                {paymentReceipt && (
+                  <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                    <p className="text-xs text-green-600 dark:text-green-400 mb-1">Transaction Receipt:</p>
+                    <p className="font-mono text-xs text-green-800 dark:text-green-200 break-all">{paymentReceipt.hash}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Free Event Completion for Approved Events */}
+          {submitted.status === "approved" && paymentStep === 'success' && !event?.isPaid && (
+            <div className="card p-6 text-center">
+              <div className="space-y-4">
+                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-green-600">
+                  {event?.approvalNeeded ? 'Registration Approved!' : 'Registration Complete!'}
+                </h3>
+                <p className="text-sm text-foreground/70">
+                  {event?.approvalNeeded 
+                    ? 'Your registration has been approved. You can now mint your NFT ticket.'
+                    : 'Your registration is complete. You can now mint your NFT ticket.'
+                  }
+                </p>
+                <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                  <p className="text-xs text-green-600 dark:text-green-400 mb-1">Event Details:</p>
+                  <p className="text-sm text-green-800 dark:text-green-200 font-medium">{event.name}</p>
+                  <p className="text-xs text-green-700 dark:text-green-300">
+                    {event.date} at {event.time}
+                  </p>
+                </div>
+                
+                {/* Manual NFT Minting for Published Events */}
+                {event?.blockchainEventAddress && (
+                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-center gap-2 mb-3">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                      <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200">NFT Ticket</h4>
+              </div>
+                    
+                    {nftCreating || isNFTMinting || isBuyTicketPending ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                          <p className="text-sm text-blue-600 dark:text-blue-400">Creating NFT Ticket...</p>
+                        </div>
+                        {(isNFTMinting || isBuyTicketPending) && (
+                          <p className="text-xs text-blue-500 dark:text-blue-300 text-center">Minting on blockchain...</p>
+                        )}
+                        {isNFTConfirming && (
+                          <p className="text-xs text-blue-500 dark:text-blue-300 text-center">Waiting for confirmation...</p>
+                        )}
+                      </div>
+                    ) : nftCreated ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-center gap-2">
+                          <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <p className="text-sm text-green-600 dark:text-green-400">NFT Ticket Created!</p>
+                        </div>
+                        <p className="text-xs text-blue-700 dark:text-blue-300 text-center">
+                          Your blockchain ticket with QR code has been successfully minted.
+                        </p>
+                      </div>
+                    ) : nftError ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-center gap-2">
+                          <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                          <p className="text-sm text-red-600 dark:text-red-400">NFT Creation Failed</p>
+                        </div>
+                        <p className="text-xs text-red-600 dark:text-red-400 text-center mb-2">{nftError}</p>
+                        <button
+                          onClick={createNFTTicket}
+                          disabled={nftCreating || isNFTMinting}
+                          className="btn-primary text-xs px-3 py-1 w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Retry NFT Creation
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <p className="text-xs text-blue-700 dark:text-blue-300 text-center">
+                          This event is published on the blockchain. Click the button below to mint your NFT ticket.
+                        </p>
+                        <button
+                          onClick={createNFTTicket}
+                          disabled={nftCreating || isNFTMinting || isBuyTicketPending}
+                          className="btn-primary text-sm px-4 py-2 w-full disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                          {nftCreating || isNFTMinting || isBuyTicketPending ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              Minting...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                              </svg>
+                              Mint NFT Ticket
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* NFT Ticket Information */}
+          {nftCreated && event?.blockchainEventAddress && (
+            <div className="card p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+              <div className="flex items-center gap-2 mb-3">
+                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h3 className="text-sm font-medium text-green-800 dark:text-green-200">NFT Ticket Minted!</h3>
+              </div>
+              <p className="text-xs text-green-700 dark:text-green-300 mb-3">
+                Your event ticket has been successfully minted as an NFT on the blockchain with ZK-based QR code!
+                {redirectCountdown && (
+                  <span className="block mt-2 font-medium">
+                    Redirecting to event page in {redirectCountdown} seconds...
+                  </span>
+                )}
+              </p>
+              <div className="text-xs text-green-600 dark:text-green-400 mb-4">
+                <p>Contract: {event.blockchainEventAddress}</p>
+                {nftTokenId && nftTokenId !== 'pending' && (
+                  <p>Token ID: {nftTokenId}</p>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => router.push(`/events/${id}`)}
+                  className="btn-primary text-sm px-4 py-2 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  View Event Page
+                </button>
+                <Link
+                  href="/"
+                  className="btn-secondary text-sm px-4 py-2 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                  </svg>
+                  Explore Events
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* NFT Ticket Display for Approved Users - Fetch from Wallet */}
+          {submitted.status === "approved" && nftCreated && event?.blockchainEventAddress && address && (
+            <BlockchainNFTTicket
+              eventContractAddress={event.blockchainEventAddress}
+              userAddress={address}
+              event={{
+                name: event.name,
+                date: event.date,
+                time: event.time,
+                location: event.location,
+                price: event.price || 0,
+                currency: event.currency || 'SONIC',
+                approvalNeeded: event.approvalNeeded
+              }}
+            />
           )}
 
           {/* Registration Details */}
@@ -957,10 +1477,10 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
                 </button>
                 <button 
                   onClick={handlePayment}
-                  disabled={isPaymentPending || isDirectPaymentPending}
+                  disabled={isPaymentPending || isDirectPaymentPending || isBuyTicketPending}
                   className="btn-primary flex-1"
                 >
-                  {(isPaymentPending || isDirectPaymentPending) ? (
+                  {(isPaymentPending || isDirectPaymentPending || isBuyTicketPending) ? (
                     <>
                       <div className="w-4 h-4 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin mr-2"></div>
                       Processing Payment...
@@ -1056,7 +1576,7 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
             </div>
           )}
 
-          {/* Payment Success */}
+          {/* Payment Success with QR Code */}
           {paymentStep === 'success' && (
             <div className="card p-6 text-center">
               <div className="space-y-4">
@@ -1067,8 +1587,115 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
                 </div>
                 <h3 className="text-lg font-semibold text-green-600">Payment Successful!</h3>
                 <p className="text-sm text-foreground/70">
-                  Your payment has been confirmed. Completing registration...
+                  Your payment has been confirmed. You can now mint your NFT QR ticket.
                 </p>
+                
+                {/* Mint NFT Button for Paid Events */}
+                {!nftCreated && !nftCreating && !isNFTMinting && !isBuyTicketPending && (
+                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="text-center">
+                      <p className="text-sm text-blue-600 dark:text-blue-400 mb-3">
+                        Ready to create your NFT QR ticket?
+                      </p>
+                      <button
+                        onClick={createNFTTicket}
+                        disabled={nftCreating || isNFTMinting || isBuyTicketPending}
+                        className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {nftCreating || isNFTMinting || isBuyTicketPending ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            Creating NFT...
+                          </div>
+                        ) : (
+                          'Mint NFT QR Ticket'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* NFT QR Code Status */}
+                {nftCreating || isNFTMinting || isBuyTicketPending ? (
+                  <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center justify-center gap-2 mb-3">
+                      <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                      <p className="text-sm text-blue-600 dark:text-blue-400">Creating NFT QR Ticket...</p>
+                    </div>
+                    {(isNFTMinting || isBuyTicketPending) && (
+                      <p className="text-xs text-blue-500 dark:text-blue-300 text-center">Minting on blockchain...</p>
+                    )}
+                    {isNFTConfirming && (
+                      <p className="text-xs text-blue-500 dark:text-blue-300 text-center">Waiting for confirmation...</p>
+                    )}
+                  </div>
+                ) : nftCreated ? (
+                  <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                    <div className="flex items-center justify-center gap-2 mb-3">
+                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <p className="text-sm text-green-600 dark:text-green-400">NFT QR Ticket Created!</p>
+                    </div>
+                    <p className="text-xs text-green-700 dark:text-green-300 text-center mb-4">
+                      Your blockchain NFT ticket with QR code has been successfully minted.
+                    </p>
+                    
+                    {/* Minted Ticket Display */}
+                    <div className="mt-4 p-4 bg-white dark:bg-gray-800 rounded-lg border-2 border-dashed border-green-300 dark:border-green-600">
+                      <div className="text-center">
+                        <div className="mb-4">
+                          <div className="inline-flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/30 rounded-full">
+                            <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m0 0a2 2 0 012 2v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9a2 2 0 012-2m0 0V7a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                            </svg>
+                            <span className="text-sm font-medium text-green-700 dark:text-green-300">NFT TICKET</span>
+                          </div>
+                        </div>
+                        
+                        <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">{event.name}</h4>
+                        <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                          <p><span className="font-medium">Date:</span> {event.date}</p>
+                          <p><span className="font-medium">Time:</span> {event.time}</p>
+                          <p><span className="font-medium">Location:</span> {event.location}</p>
+                          <p><span className="font-medium">Participant:</span> {values.name || 'Anonymous'}</p>
+                          {nftTokenId && nftTokenId !== 'pending' && nftTokenId !== 'qr-generated' && (
+                            <p><span className="font-medium">Token ID:</span> #{nftTokenId}</p>
+                          )}
+                        </div>
+                        
+                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                            This NFT serves as your official event ticket
+                          </p>
+                          {nftContractAddress && (
+                            <p className="text-xs font-mono text-gray-400 dark:text-gray-500 break-all">
+                              Contract: {nftContractAddress}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : nftError ? (
+                  <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      <p className="text-sm text-red-600 dark:text-red-400">NFT Creation Failed</p>
+                    </div>
+                    <p className="text-xs text-red-600 dark:text-red-400 text-center mb-2">{nftError}</p>
+                    <button
+                      onClick={createNFTTicket}
+                      disabled={nftCreating || isNFTMinting || isBuyTicketPending}
+                      className="btn-primary text-xs px-3 py-1 w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Retry NFT Creation
+                    </button>
+                  </div>
+                ) : null}
+                
                 {paymentReceipt && (
                   <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
                     <p className="text-xs text-green-600 dark:text-green-400 mb-1">Transaction Receipt:</p>

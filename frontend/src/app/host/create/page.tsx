@@ -28,6 +28,7 @@ export default function CreateEventPage() {
   const [price, setPrice] = useState<string>("");
   const [currency, setCurrency] = useState<string>("SONIC");
   const [approvalNeeded, setApprovalNeeded] = useState(false);
+  const [allowResale, setAllowResale] = useState(true);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [location, setLocation] = useState(LOCATIONS[0]);
@@ -54,6 +55,17 @@ export default function CreateEventPage() {
       setOrganizationDescription(organization.description || "");
     }
   }, [organization]);
+
+  // Redirect to dashboard after event creation
+  useEffect(() => {
+    if (eventCreated) {
+      const timer = setTimeout(() => {
+        router.push('/host/dashboard');
+      }, 2000); // Redirect after 2 seconds to show success message
+
+      return () => clearTimeout(timer);
+    }
+  }, [eventCreated, router]);
 
   const isValid = name && bannerDataUrl && date && time && location;
 
@@ -89,6 +101,7 @@ export default function CreateEventPage() {
         price: isPaid && price ? Number(price) : undefined,
         currency: isPaid ? currency : undefined,
         approvalNeeded,
+        allowResale: !approvalNeeded ? allowResale : false, // Resale only for non-approval events
         date,
         time,
         location,
@@ -147,7 +160,7 @@ export default function CreateEventPage() {
                   Event Created Successfully!
                 </h2>
                 <p className="text-sm text-green-700 dark:text-green-300">
-                  Your event has been saved as a draft. Go to your dashboard to manage and publish it.
+                  Your event has been saved as a draft. Redirecting to dashboard...
                 </p>
               </div>
             </div>
@@ -468,6 +481,47 @@ export default function CreateEventPage() {
                     <p className="text-xs text-foreground/60">
                       If enabled, you'll need to manually approve each registration before participants can attend.
                     </p>
+                  </div>
+                  
+                  {/* Resale Settings */}
+                  <div className="space-y-4">
+                    <h4 className="font-medium text-foreground">NFT Ticket Features</h4>
+                    
+                    {/* Resale Option - Only for non-approval events */}
+                    {!approvalNeeded && (
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <input 
+                          type="checkbox" 
+                          checked={allowResale} 
+                          onChange={(e) => setAllowResale(e.target.checked)} 
+                          className="w-4 h-4 text-green-600"
+                        />
+                        <div className="flex-1">
+                          <span className="text-sm font-medium group-hover:text-foreground/80 transition-colors">
+                            Allow ticket resale
+                          </span>
+                          <p className="text-xs text-foreground/60">
+                            Participants can list their NFT tickets for resale (up to 3 times)
+                          </p>
+                        </div>
+                      </label>
+                    )}
+                    
+                    {/* Info for approval events */}
+                    {approvalNeeded && (
+                      <div className="flex items-start gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                        <svg className="w-4 h-4 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div>
+                          <p className="text-xs font-medium text-orange-800 dark:text-orange-200">
+                          </p>
+                          <p className="text-xs text-orange-700 dark:text-orange-300 mt-1">
+                            Only available for FREE and PAID events without approval
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
                                      {/* Pricing Configuration */}

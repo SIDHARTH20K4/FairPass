@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import Organization from '../models/Organization';
+import Event from '../models/Event';
 import { CreateOrganizationRequest } from '../types';
 
 const router = express.Router();
@@ -24,6 +25,26 @@ router.post('/organizations', async (req: Request<{}, {}, CreateOrganizationRequ
   }
 });
 
+// Check if organization exists by wallet address
+router.post('/organizations/check', async (req: Request<{}, {}, { address: string }>, res: Response) => {
+  try {
+    const { address } = req.body;
+    if (!address) {
+      return res.status(400).json({ error: 'Address is required' });
+    }
+    
+    const organization = await Organization.findOne({ address: address.toLowerCase() }).lean();
+    if (organization) {
+      return res.json({ exists: true, organization });
+    } else {
+      return res.status(404).json({ exists: false, error: 'Organization not found' });
+    }
+  } catch (error) {
+    console.error('Error checking organization:', error);
+    res.status(500).json({ error: 'Failed to check organization' });
+  }
+});
+
 // Get organization by wallet address
 router.get('/organizations/:address', async (req: Request<{ address: string }>, res: Response) => {
   try {
@@ -34,6 +55,27 @@ router.get('/organizations/:address', async (req: Request<{ address: string }>, 
   } catch (error) {
     console.error('Error fetching organization:', error);
     res.status(500).json({ error: 'Failed to fetch organization' });
+  }
+});
+
+// Get events by organization address
+router.get('/organizations/:address/events', async (req: Request<{ address: string }>, res: Response) => {
+  try {
+    const { address } = req.params;
+    const events = await Event.find({ hostAddress: address.toLowerCase() })
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    // Convert _id to id for frontend compatibility
+    const eventsWithId = events.map(event => ({
+      ...event,
+      id: event._id.toString()
+    }));
+    
+    res.json(eventsWithId);
+  } catch (error) {
+    console.error('Error fetching organization events:', error);
+    res.status(500).json({ error: 'Failed to fetch organization events' });
   }
 });
 

@@ -170,7 +170,27 @@ body {
   font-size: 0.875rem;
   transition: all 0.2s ease;
   width: 100%;
-  color: var(--foreground);
+  color: #000000; /* Black text for better contrast on white background */
+}
+
+/* Dark mode input text */
+@media (prefers-color-scheme: dark) {
+  .input {
+    color: #ffffff; /* White text for dark mode */
+  }
+}
+
+/* Ensure proper contrast for bg-foreground elements */
+/* Light mode: black background, white text */
+.bg-foreground {
+  color: #ffffff !important; /* White text on black background */
+}
+
+/* Dark mode: white background, black text */
+@media (prefers-color-scheme: dark) {
+  .bg-foreground {
+    color: #000000 !important; /* Black text on white background */
+  }
 }
 
 .input:focus {
@@ -295,8 +315,16 @@ body {
 /* Date and Time input specific styles */
 .input[type="date"],
 .input[type="time"] {
-  color: var(--foreground);
+  color: #000000; /* Black text for better contrast on white background */
   background: var(--input);
+}
+
+/* Dark mode date/time input text */
+@media (prefers-color-scheme: dark) {
+  .input[type="date"],
+  .input[type="time"] {
+    color: #ffffff; /* White text for dark mode */
+  }
 }
 
 .input[type="date"]::-webkit-calendar-picker-indicator,
@@ -305,12 +333,11 @@ body {
   cursor: pointer;
 }
 
-/* Ensure date/time inputs are visible in dark mode */
+/* Additional dark mode input styles */
 @media (prefers-color-scheme: dark) {
   .input[type="date"],
   .input[type="time"] {
     background: rgba(255, 255, 255, 0.15);
-    color: white;
   }
   
   .input[type="date"]::-webkit-calendar-picker-indicator,

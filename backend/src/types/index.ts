@@ -10,6 +10,7 @@ export interface IEvent extends Document {
   price?: number;
   currency?: string;
   approvalNeeded: boolean;
+  allowResale?: boolean;
   date: string;
   time: string;
   location: string;
@@ -34,6 +35,7 @@ export interface CreateEventRequest {
   price?: number;
   currency?: string;
   approvalNeeded: boolean;
+  allowResale?: boolean;
   date: string;
   time: string;
   location: string;
@@ -59,6 +61,8 @@ export interface ISubmission extends Document {
   qrUrl?: string;
   jsonCid?: string;
   jsonUrl?: string;
+  nftTokenId?: string;
+  nftContractAddress?: string;
   signature: string;
   createdAt: Date;
   updatedAt: Date;
@@ -82,6 +86,8 @@ export interface UpdateSubmissionRequest {
   qrUrl?: string;
   jsonCid?: string;
   jsonUrl?: string;
+  nftTokenId?: string;
+  nftContractAddress?: string;
 }
 
 // API Response Types
