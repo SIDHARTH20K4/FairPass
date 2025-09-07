@@ -42,8 +42,8 @@ Main Functions:
 - `mintForUser()` → Organizer batch minting  
 - `ownerOfNFT()` → Verify ticket ownership  
 
-🔗 Smart Contract
-EventFactory.sol
+## 🔗 Smart Contract
+**EventFactory.sol**
 
 **CA:** 0x9016F1b7DA5C91d6479aAF99A8765Cb4ED0668bE
 
