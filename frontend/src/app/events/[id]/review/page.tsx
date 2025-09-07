@@ -320,35 +320,6 @@ https://fairpass.onrender.com/api
               </div>
               </div>
               
-              {/* QR Code Display for Approved Participants */}
-              {s.status === "approved" && s.qrUrl && (
-                <div className="border-t border-foreground/10 pt-3">
-                  <div className="flex items-center gap-3">
-                    <div className="text-sm font-medium text-foreground">Event Ticket QR Code:</div>
-                    <a 
-                      href={s.qrUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary hover:underline"
-                    >
-                      View Full Size
-                    </a>
-                  </div>
-                  <div className="mt-2 flex items-center gap-4">
-                    <img 
-                      src={s.qrUrl} 
-                      alt="Event Ticket QR Code" 
-                      className="w-24 h-24 border border-foreground/20 rounded-lg"
-                    />
-                    <div className="text-xs text-foreground/70 space-y-1">
-                      <div><strong>Event:</strong> {event.name}</div>
-                      <div><strong>Participant:</strong> {s.values.name || s.values.Name || 'Anonymous'}</div>
-                      <div><strong>Status:</strong> Approved</div>
-                      <div><strong>QR CID:</strong> {s.qrCid}</div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </li>
           ))}
         </ul>
