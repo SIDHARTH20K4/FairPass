@@ -7,7 +7,7 @@ const router = express.Router();
 const JWT_SECRET = process.env['JWT_SECRET'] || "your-secret-key";
 
 // Sign in
-router.post('/signin', async (req: Request, res: Response) => {
+router.post('/signin', async (req: Request, res: Response): Promise<void> => {
   try {
     const { address, email, password } = req.body;
 
@@ -17,7 +17,8 @@ router.post('/signin', async (req: Request, res: Response) => {
     if (address) {
       // Wallet-based signin
       if (!address) {
-        return res.status(400).json({ error: "Wallet address is required" });
+        res.status(400).json({ error: "Wallet address is required" });
+        return;
       }
       
       organization = await Organization.findOne({ 
@@ -25,12 +26,14 @@ router.post('/signin', async (req: Request, res: Response) => {
       }).lean();
       
       if (!organization) {
-        return res.status(401).json({ error: "Organization not found with this wallet address" });
+        res.status(401).json({ error: "Organization not found with this wallet address" });
+        return;
       }
     } else if (email && password) {
       // Email-based signin
       if (!email || !password) {
-        return res.status(400).json({ error: "Email and password are required" });
+        res.status(400).json({ error: "Email and password are required" });
+        return;
       }
 
       organization = await Organization.findOne({ 
@@ -39,7 +42,8 @@ router.post('/signin', async (req: Request, res: Response) => {
       
       if (!organization) {
         console.log(`No organization found with email: ${email.toLowerCase()}`);
-        return res.status(401).json({ error: "Invalid credentials" });
+        res.status(401).json({ error: "Invalid credentials" });
+        return;
       }
       
       console.log(`Organization found: ${organization.name}, has password: ${!!organization.password}`);
@@ -47,7 +51,8 @@ router.post('/signin', async (req: Request, res: Response) => {
       // Verify password using bcrypt
       if (!organization.password) {
         console.log(`Organization ${organization.name} has no password set`);
-        return res.status(401).json({ error: "This account doesn't have a password set. Please use wallet authentication instead." });
+        res.status(401).json({ error: "This account doesn't have a password set. Please use wallet authentication instead." });
+        return;
       }
       
       console.log(`Verifying password for organization: ${organization.name}`);
@@ -55,12 +60,14 @@ router.post('/signin', async (req: Request, res: Response) => {
       
       if (!isValidPassword) {
         console.log(`Password verification failed for organization: ${organization.name}`);
-        return res.status(401).json({ error: "Invalid credentials" });
+        res.status(401).json({ error: "Invalid credentials" });
+        return;
       }
       
       console.log(`Password verification successful for organization: ${organization.name}`);
     } else {
-      return res.status(400).json({ error: "Either wallet address or email/password is required" });
+      res.status(400).json({ error: "Either wallet address or email/password is required" });
+      return;
     }
 
     // Generate JWT token
@@ -93,13 +100,14 @@ router.post('/signin', async (req: Request, res: Response) => {
 });
 
 // Register
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/register', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { address, name, email, password, description, signature } = req.body;
+    const { address, name, email, password, description } = req.body;
 
     // Validate required fields
     if (!address || !name) {
-      return res.status(400).json({ error: "Wallet address and name are required" });
+      res.status(400).json({ error: "Wallet address and name are required" });
+      return;
     }
 
     // Check if organization already exists with this address
@@ -107,7 +115,8 @@ router.post('/register', async (req: Request, res: Response) => {
       address: address.toLowerCase() 
     });
     if (existingOrgByAddress) {
-      return res.status(409).json({ error: "Organization with this wallet address already exists" });
+      res.status(409).json({ error: "Organization with this wallet address already exists" });
+      return;
     }
 
     // Check if organization already exists with this email (if provided)
@@ -116,7 +125,8 @@ router.post('/register', async (req: Request, res: Response) => {
         email: email.toLowerCase() 
       });
       if (existingOrgByEmail) {
-        return res.status(409).json({ error: "Organization with this email already exists" });
+        res.status(409).json({ error: "Organization with this email already exists" });
+        return;
       }
     }
 
@@ -159,16 +169,18 @@ router.post('/register', async (req: Request, res: Response) => {
         description: organization.description
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Registration error:", error);
     
     // Handle specific MongoDB errors
     if (error.code === 11000) {
       if (error.keyPattern?.address) {
-        return res.status(409).json({ error: "Organization with this wallet address already exists" });
+        res.status(409).json({ error: "Organization with this wallet address already exists" });
+        return;
       }
       if (error.keyPattern?.email) {
-        return res.status(409).json({ error: "Organization with this email already exists" });
+        res.status(409).json({ error: "Organization with this email already exists" });
+        return;
       }
     }
     
@@ -177,11 +189,12 @@ router.post('/register', async (req: Request, res: Response) => {
 });
 
 // Get current user
-router.get('/me', async (req: Request, res: Response) => {
+router.get('/me', async (req: Request, res: Response): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: "Not authenticated" });
+      res.status(401).json({ error: "Not authenticated" });
+      return;
     }
 
     const token = authHeader.substring(7);
@@ -190,14 +203,16 @@ router.get('/me', async (req: Request, res: Response) => {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
     
     if (!decoded.organizationId) {
-      return res.status(401).json({ error: "Invalid token" });
+      res.status(401).json({ error: "Invalid token" });
+      return;
     }
 
     // Get organization details
     const organization = await Organization.findById(decoded.organizationId).select('-password').lean();
     
     if (!organization) {
-      return res.status(404).json({ error: "Organization not found" });
+      res.status(404).json({ error: "Organization not found" });
+      return;
     }
 
     res.json({
@@ -216,7 +231,7 @@ router.get('/me', async (req: Request, res: Response) => {
 });
 
 // Test endpoint for debugging
-router.get('/debug/organizations', async (req: Request, res: Response) => {
+router.get('/debug/organizations', async (_req: Request, res: Response): Promise<void> => {
   try {
     const organizations = await Organization.find({}).select('-password').lean();
     res.json({

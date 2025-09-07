@@ -99,12 +99,48 @@ export interface ApiResponse<T = any> {
   details?: string[];
 }
 
-export interface EventResponse extends Omit<IEvent, '_id'> {
+export interface EventResponse {
   id: string;
+  name: string;
+  bannerUrl: string;
+  bannerCid?: string;
+  isPaid: boolean;
+  price?: number;
+  currency?: string;
+  approvalNeeded: boolean;
+  allowResale?: boolean;
+  date: string;
+  time: string;
+  location: string;
+  organization?: string;
+  organizationDescription?: string;
+  eventDescription?: string;
+  lat?: number;
+  lng?: number;
+  hostAddress: string;
+  status: 'draft' | 'published';
+  blockchainEventAddress?: string | null;
+  useBlockchain?: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-export interface SubmissionResponse extends Omit<ISubmission, '_id'> {
+export interface SubmissionResponse {
   id: string;
+  eventId: string;
+  address: string;
+  values: Record<string, any>;
+  status: 'pending' | 'approved' | 'rejected';
+  commitment?: string;
+  qrCid?: string;
+  qrUrl?: string;
+  jsonCid?: string;
+  jsonUrl?: string;
+  nftTokenId?: string;
+  nftContractAddress?: string;
+  signature: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 // Request Types

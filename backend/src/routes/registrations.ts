@@ -13,7 +13,7 @@ import {
 const router = express.Router();
 
 // Get all registrations for an event
-router.get('/events/:eventId/registrations', async (req: Request<{ eventId: string }, {}, {}, { status?: string }>, res: Response) => {
+router.get('/events/:eventId/registrations', async (req: Request<{ eventId: string }, {}, {}, { status?: string }>, res: Response): Promise<void> => {
   try {
     const { eventId } = req.params;
     const { status } = req.query;
@@ -23,14 +23,16 @@ router.get('/events/:eventId/registrations', async (req: Request<{ eventId: stri
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
       console.log(`❌ Invalid eventId format: ${eventId}`);
-      return res.status(400).json({ error: 'Invalid event ID format' });
+      res.status(400).json({ error: 'Invalid event ID format' });
+      return;
     }
     
     // Verify event exists
     const event = await Event.findById(eventId);
     if (!event) {
       console.log(`❌ Event not found: ${eventId}`);
-      return res.status(404).json({ error: 'Event not found' });
+      res.status(404).json({ error: 'Event not found' });
+      return;
     }
     
     console.log(`✅ Event found: ${event.name} (approvalNeeded: ${event.approvalNeeded})`);
@@ -67,7 +69,7 @@ router.get('/events/:eventId/registrations', async (req: Request<{ eventId: stri
 router.post('/events/:eventId/registrations', async (
   req: Request<{ eventId: string }, {}, CreateSubmissionRequest>, 
   res: Response
-) => {
+): Promise<void> => {
   try {
     const { eventId } = req.params;
     const registrationData = req.body;
@@ -75,7 +77,8 @@ router.post('/events/:eventId/registrations', async (
     // Verify event exists
     const event = await Event.findById(eventId);
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      res.status(404).json({ error: 'Event not found' });
+      return;
     }
     
     // Check if user already registered
@@ -85,12 +88,14 @@ router.post('/events/:eventId/registrations', async (
     });
     
     if (existingSubmission) {
-      return res.status(400).json({ error: 'Already registered for this event' });
+      res.status(400).json({ error: 'Already registered for this event' });
+      return;
     }
     
     // Validate required fields
     if (!registrationData.address || !registrationData.values || !registrationData.signature) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      res.status(400).json({ error: 'Missing required fields' });
+      return;
     }
     
     console.log('🔍 Registration data received:', {
@@ -148,7 +153,7 @@ router.post('/events/:eventId/registrations', async (
 router.patch('/events/:eventId/registrations/:submissionId', async (
   req: Request<{ eventId: string; submissionId: string }, {}, UpdateSubmissionRequest>, 
   res: Response
-) => {
+): Promise<void> => {
   try {
     const { eventId, submissionId } = req.params;
     const { status, qrCid, qrUrl, jsonCid, jsonUrl, nftTokenId, nftContractAddress } = req.body;
@@ -156,12 +161,14 @@ router.patch('/events/:eventId/registrations/:submissionId', async (
     // Verify event exists
     const event = await Event.findById(eventId);
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      res.status(404).json({ error: 'Event not found' });
+      return;
     }
     
     // Validate status
     if (!['pending', 'approved', 'rejected'].includes(status)) {
-      return res.status(400).json({ error: 'Invalid status' });
+      res.status(400).json({ error: 'Invalid status' });
+      return;
     }
     
     const updateData: any = { status };
@@ -193,7 +200,8 @@ router.patch('/events/:eventId/registrations/:submissionId', async (
     ).lean();
     
     if (!submission) {
-      return res.status(404).json({ error: 'Registration not found' });
+      res.status(404).json({ error: 'Registration not found' });
+      return;
     }
     
     const submissionResponse: SubmissionResponse = {
@@ -212,7 +220,7 @@ router.patch('/events/:eventId/registrations/:submissionId', async (
 router.get('/events/:eventId/registrations/user/:address', async (
   req: Request<{ eventId: string; address: string }>, 
   res: Response
-) => {
+): Promise<void> => {
   try {
     const { eventId, address } = req.params;
     
@@ -222,7 +230,8 @@ router.get('/events/:eventId/registrations/user/:address', async (
     }).lean();
     
     if (!submission) {
-      return res.status(404).json({ error: 'Registration not found' });
+      res.status(404).json({ error: 'Registration not found' });
+      return;
     }
     
     const submissionResponse: SubmissionResponse = {
@@ -238,14 +247,15 @@ router.get('/events/:eventId/registrations/user/:address', async (
 });
 
 // Get registration count for an event
-router.get('/events/:eventId/registrations/count', async (req: Request<{ eventId: string }>, res: Response) => {
+router.get('/events/:eventId/registrations/count', async (req: Request<{ eventId: string }>, res: Response): Promise<void> => {
   try {
     const { eventId } = req.params;
     
     // Verify event exists
     const event = await Event.findById(eventId);
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      res.status(404).json({ error: 'Event not found' });
+      return;
     }
     
     const count = await Submission.countDocuments({ eventId });
@@ -258,13 +268,14 @@ router.get('/events/:eventId/registrations/count', async (req: Request<{ eventId
 });
 
 // Get registration counts for multiple events
-router.get('/events/registrations/counts', async (req: Request<{}, {}, {}, { ids: string }>, res: Response) => {
+router.get('/events/registrations/counts', async (req: Request<{}, {}, {}, { ids: string }>, res: Response): Promise<void> => {
   try {
     const { ids } = req.query;
     console.log('Registration counts request - ids:', ids);
     
     if (!ids) {
-      return res.status(400).json({ error: 'Event IDs are required' });
+      res.status(400).json({ error: 'Event IDs are required' });
+      return;
     }
     
     const eventIds = Array.isArray(ids) ? ids : [ids];
@@ -304,7 +315,7 @@ router.get('/events/registrations/counts', async (req: Request<{}, {}, {}, { ids
 router.post('/events/:eventId/checkin', async (
   req: Request<{ eventId: string }, {}, CheckInRequest>, 
   res: Response
-) => {
+): Promise<void> => {
   try {
     const { eventId } = req.params;
     const { proof, commitment } = req.body;
@@ -312,22 +323,24 @@ router.post('/events/:eventId/checkin', async (
     // Verify event exists
     const event = await Event.findById(eventId);
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      res.status(404).json({ error: 'Event not found' });
+      return;
     }
     
     // Verify the ZK proof
     const verification = await SemaphoreService.verifyCheckInProof(eventId, proof, commitment);
     
     if (!verification.valid) {
-      return res.status(400).json({ 
+      res.status(400).json({ 
         error: 'Invalid check-in proof', 
         details: verification.error 
       });
+      return;
     }
     
     // Check if already checked in (using nullifier hash)
     // In a real implementation, you'd store nullifier hashes to prevent double check-in
-    const nullifierKey = `checkin:${eventId}:${proof.nullifierHash}`;
+    // const nullifierKey = `checkin:${eventId}:${proof.nullifierHash}`;
     // TODO: Implement nullifier storage to prevent double check-in
     
     res.json({ 
@@ -345,14 +358,15 @@ router.post('/events/:eventId/checkin', async (
 router.get('/events/:eventId/group', async (
   req: Request<{ eventId: string }>, 
   res: Response
-) => {
+): Promise<void> => {
   try {
     const { eventId } = req.params;
     
     // Verify event exists
     const event = await Event.findById(eventId);
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      res.status(404).json({ error: 'Event not found' });
+      return;
     }
     
     // Get the event group
@@ -369,7 +383,7 @@ router.get('/events/:eventId/group', async (
 router.post('/events/:eventId/validate-qr', async (
   req: Request<{ eventId: string }, {}, { qrData: string }>, 
   res: Response
-) => {
+): Promise<void> => {
   try {
     const { eventId } = req.params;
     const { qrData } = req.body;
@@ -377,7 +391,8 @@ router.post('/events/:eventId/validate-qr', async (
     // Verify event exists
     const event = await Event.findById(eventId);
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      res.status(404).json({ error: 'Event not found' });
+      return;
     }
     
     // Parse QR data
@@ -399,7 +414,7 @@ router.post('/events/:eventId/validate-qr', async (
     const validationResult = {
       success: true,
       message: 'Check-in validated successfully!',
-      participantName: participantData.name || participantData.participantName || 'Unknown Participant',
+      participantName: participantData['name'] || participantData['participantName'] || 'Unknown Participant',
       eventName: event.name,
       checkedInAt: new Date().toISOString(),
       nullifierHash: `nullifier_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -416,14 +431,15 @@ router.post('/events/:eventId/validate-qr', async (
 router.get('/events/:eventId/group/members', async (
   req: Request<{ eventId: string }>, 
   res: Response
-) => {
+): Promise<void> => {
   try {
     const { eventId } = req.params;
     
     // Verify event exists
     const event = await Event.findById(eventId);
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      res.status(404).json({ error: 'Event not found' });
+      return;
     }
     
     // Get all approved submissions with commitments
