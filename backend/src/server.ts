@@ -15,7 +15,11 @@ import authRoutes from './routes/auth';
 dotenv.config();
 
 const app = express();
+<<<<<<< HEAD
 const PORT = parseInt(process.env["PORT"] || '4000', 10);
+=======
+const PORT = process.env.PORT || 4000;
+>>>>>>> f8fb3b9b7ab29f882a916477ea2941d80badfdb8
 
 // Connect to MongoDB
 connectDB();
