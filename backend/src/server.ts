@@ -23,10 +23,31 @@ connectDB();
 // Middleware
 app.use(helmet());
 app.use(morgan('combined'));
-app.use(cors({
-  origin: process.env["CORS_ORIGIN"] || 'http://localhost:3000',
-  credentials: true
-}));
+// CORS configuration
+const corsOptions = {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'https://fairpass.vercel.app',
+      'https://www.fairpass.vercel.app'
+    ];
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -35,7 +56,8 @@ app.get('/health', (_req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
@@ -43,7 +65,24 @@ app.get('/api/health', (_req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    cors_origin: process.env.CORS_ORIGIN || 'http://localhost:3000'
+  });
+});
+
+// API info endpoint
+app.get('/api', (_req, res) => {
+  res.json({
+    message: 'FairPass API',
+    version: '1.0.0',
+    endpoints: {
+      events: '/api/events',
+      registrations: '/api/events/:eventId/registrations',
+      organizations: '/api/organizations',
+      auth: '/api/auth'
+    },
+    documentation: 'https://github.com/fabiomughilan/FairPass'
   });
 });
 
