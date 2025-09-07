@@ -207,7 +207,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     if (!address || !mySub) return;
     
     try {
-      const response = await fetch(`https://fairpassbackend.vercel.app/api
+      const response = await fetch(`
+https://fairpass.onrender.com/api
 /events/${id}/registrations/user/${address.toLowerCase()}`);
       if (response.ok) {
         const data = await response.json();
@@ -264,7 +265,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
       try {
         console.log('🔍 Checking registration status for detail page:', { address: address.toLowerCase(), eventId: id });
-        const response = await fetch(`https://fairpassbackend.vercel.app/api
+        const response = await fetch(`
+https://fairpass.onrender.com/api
 /events/${id}/registrations/user/${address.toLowerCase()}`);
         console.log('📡 Registration check response for detail page:', { status: response.status, ok: response.ok });
         
@@ -375,7 +377,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       console.log('✅ QR uploaded to IPFS:', { qrUrl: qrUpload.url, qrCid: qrUpload.cid });
       
       // Update the registration with QR data
-      const updateResponse = await fetch(`https://fairpassbackend.vercel.app/api
+      const updateResponse = await fetch(`
+https://fairpass.onrender.com/api
 /events/${id}/registrations/${mySub.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -391,7 +394,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       if (updateResponse.ok) {
         console.log('✅ QR data updated successfully');
         // Reload registration status
-        const response = await fetch(`https://fairpassbackend.vercel.app/api
+        const response = await fetch(`
+https://fairpass.onrender.com/api
 /events/${id}/registrations/user/${address.toLowerCase()}`);
         if (response.ok) {
           const data = await response.json();

@@ -88,7 +88,8 @@ export default function QRScannerPage() {
           // Get event details for better validation result
           let eventName = "Unknown Event";
           try {
-            const eventResponse = await fetch(`https://fairpassbackend.vercel.app/api
+            const eventResponse = await fetch(`
+https://fairpass.onrender.com/api
 /events/${qrData.eventId}`);
             if (eventResponse.ok) {
               const eventData = await eventResponse.json();

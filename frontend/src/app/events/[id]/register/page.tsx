@@ -275,7 +275,8 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
 
       try {
         console.log('🔍 Checking registration status for:', { address: address.toLowerCase(), eventId: id });
-        const response = await fetch(`https://fairpassbackend.vercel.app/api
+        const response = await fetch(`
+https://fairpass.onrender.com/api
 /events/${id}/registrations/user/${address.toLowerCase()}`);
         console.log('📡 Registration check response:', { status: response.status, ok: response.ok });
         
@@ -454,7 +455,8 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
         console.log('📜 Including NFT Contract Address:', nftContractAddress);
       }
 
-      const updateResponse = await fetch(`https://fairpassbackend.vercel.app/api
+      const updateResponse = await fetch(`
+https://fairpass.onrender.com/api
 /events/${id}/registrations/${submitted.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -606,7 +608,8 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
 
     // Check if already registered by calling backend API
     try {
-      const checkResponse = await fetch(`https://fairpassbackend.vercel.app/api
+      const checkResponse = await fetch(`
+https://fairpass.onrender.com/api
 /events/${id}/registrations/user/${address.toLowerCase()}`);
       if (checkResponse.ok) {
       alert("You have already registered with this wallet.");
@@ -729,7 +732,8 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
         console.log('📤 Including QR data in backend request:', { qrUrl: qrImageUrl, qrCid, jsonUrl, jsonCid });
       }
 
-      const backendResponse = await fetch(`https://fairpassbackend.vercel.app/api
+      const backendResponse = await fetch(`
+https://fairpass.onrender.com/api
 /events/${id}/registrations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -787,7 +791,8 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
     
     setCheckingStatus(true);
     try {
-      const response = await fetch(`https://fairpassbackend.vercel.app/api
+      const response = await fetch(`
+https://fairpass.onrender.com/api
 /events/${id}/registrations/user/${address.toLowerCase()}`);
       if (response.ok) {
         const data = await response.json();

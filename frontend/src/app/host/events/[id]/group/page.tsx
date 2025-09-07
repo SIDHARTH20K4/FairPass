@@ -25,7 +25,8 @@ export default function EventGroupPage() {
   async function loadGroupMembers() {
     try {
       setLoading(true);
-      const response = await fetch(`https://fairpassbackend.vercel.app/api
+      const response = await fetch(`
+https://fairpass.onrender.com/api
 /events/${id}/group/members`);
       
       if (!response.ok) {

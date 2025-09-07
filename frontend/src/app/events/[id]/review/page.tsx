@@ -35,7 +35,8 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
       try {
         console.log('Fetching registrations for event:', id);
         // Use backend API to get registrations
-        const res = await fetch(`https://fairpassbackend.vercel.app/api
+        const res = await fetch(`
+https://fairpass.onrender.com/api
 /events/${id}/registrations`);
         
         console.log('Response status:', res.status);
@@ -175,7 +176,8 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
       console.log(`🔄 Updating registration ${s.id} for event ${id}...`);
       console.log(`📤 Payload:`, updatePayload);
       
-      const response = await fetch(`https://fairpassbackend.vercel.app/api
+      const response = await fetch(`
+https://fairpass.onrender.com/api
 /events/${id}/registrations/${s.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -224,7 +226,8 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
       }
       
       // Update submission status in backend
-      const response = await fetch(`https://fairpassbackend.vercel.app/api
+      const response = await fetch(`
+https://fairpass.onrender.com/api
 /events/${id}/registrations/${s.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },

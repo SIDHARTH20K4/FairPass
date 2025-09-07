@@ -1,6 +1,7 @@
 // Centralized API configuration
 export const API_CONFIG = {
-  BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'https://fairpassbackend.vercel.app/api',
+  BASE_URL: process.env.NEXT_PUBLIC_API_URL || '
+https://fairpass.onrender.com/api',
   
   // API endpoints
   ENDPOINTS: {

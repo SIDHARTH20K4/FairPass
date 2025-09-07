@@ -89,7 +89,8 @@ export class ZKProofService {
    */
   static async getEventGroup(eventId: string): Promise<EventGroup> {
     try {
-      const response = await fetch(`https://fairpassbackend.vercel.app/api
+      const response = await fetch(`
+https://fairpass.onrender.com/api
 /events/${eventId}/group`);
       
       if (!response.ok) {
@@ -112,7 +113,8 @@ export class ZKProofService {
     commitment: string
   ): Promise<{ success: boolean; message: string; nullifierHash: string }> {
     try {
-      const response = await fetch(`https://fairpassbackend.vercel.app/api
+      const response = await fetch(`
+https://fairpass.onrender.com/api
 /events/${eventId}/checkin`, {
         method: 'POST',
         headers: {
