@@ -16,7 +16,8 @@ NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_project_id_here
 NEXT_PUBLIC_ENABLE_TESTNETS=true
 
 # API URL
-NEXT_PUBLIC_API_URL=http://localhost:4000/api
+NEXT_PUBLIC_API_URL=https://fairpassbackend.vercel.app/api
+
 ```
 
 ### Getting WalletConnect Project ID

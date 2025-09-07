@@ -32,7 +32,8 @@ const corsOptions = {
     const allowedOrigins = [
       'http://localhost:3000',
       'https://fairpass.vercel.app',
-      'https://www.fairpass.vercel.app'
+      'https://www.fairpass.vercel.app',
+      'https://fairpassbackend.vercel.app'
     ];
     
     if (allowedOrigins.includes(origin)) {

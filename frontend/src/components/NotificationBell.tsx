@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { apiGetEventsRegistrationCounts } from "@/lib/api";
+import { API_CONFIG } from "@/config/api";
 
 interface Notification {
   id: string;
@@ -47,7 +48,7 @@ export default function NotificationBell({ className = "" }: NotificationBellPro
     setLoading(true);
     try {
       // Get all events for this organization
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+      const apiUrl = API_CONFIG.BASE_URL;
       console.log(`🔍 Loading notifications for organization: ${organization.address}`);
       console.log(`🌐 API URL: ${apiUrl}`);
       

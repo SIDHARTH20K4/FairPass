@@ -35,7 +35,8 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
       try {
         console.log('Fetching registrations for event:', id);
         // Use backend API to get registrations
-        const res = await fetch(`http://localhost:4000/api/events/${id}/registrations`);
+        const res = await fetch(`https://fairpassbackend.vercel.app/api
+/events/${id}/registrations`);
         
         console.log('Response status:', res.status);
         console.log('Response headers:', res.headers);
@@ -174,7 +175,8 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
       console.log(`🔄 Updating registration ${s.id} for event ${id}...`);
       console.log(`📤 Payload:`, updatePayload);
       
-      const response = await fetch(`http://localhost:4000/api/events/${id}/registrations/${s.id}`, {
+      const response = await fetch(`https://fairpassbackend.vercel.app/api
+/events/${id}/registrations/${s.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatePayload)
@@ -222,7 +224,8 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
       }
       
       // Update submission status in backend
-      const response = await fetch(`http://localhost:4000/api/events/${id}/registrations/${s.id}`, {
+      const response = await fetch(`https://fairpassbackend.vercel.app/api
+/events/${id}/registrations/${s.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'rejected' })

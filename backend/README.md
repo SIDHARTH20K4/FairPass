@@ -127,7 +127,8 @@ The server will start on `http://localhost:4000`
 Update your frontend environment variables:
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:4000/api
+NEXT_PUBLIC_API_URL=https://fairpassbackend.vercel.app/api
+
 ```
 
 ## Development

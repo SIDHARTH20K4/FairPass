@@ -89,7 +89,8 @@ export class ZKProofService {
    */
   static async getEventGroup(eventId: string): Promise<EventGroup> {
     try {
-      const response = await fetch(`http://localhost:4000/api/events/${eventId}/group`);
+      const response = await fetch(`https://fairpassbackend.vercel.app/api
+/events/${eventId}/group`);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch event group: ${response.status}`);
@@ -111,7 +112,8 @@ export class ZKProofService {
     commitment: string
   ): Promise<{ success: boolean; message: string; nullifierHash: string }> {
     try {
-      const response = await fetch(`http://localhost:4000/api/events/${eventId}/checkin`, {
+      const response = await fetch(`https://fairpassbackend.vercel.app/api
+/events/${eventId}/checkin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -25,7 +25,8 @@ export default function EventGroupPage() {
   async function loadGroupMembers() {
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:4000/api/events/${id}/group/members`);
+      const response = await fetch(`https://fairpassbackend.vercel.app/api
+/events/${id}/group/members`);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch group members: ${response.status}`);

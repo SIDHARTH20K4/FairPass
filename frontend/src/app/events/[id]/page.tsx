@@ -207,7 +207,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     if (!address || !mySub) return;
     
     try {
-      const response = await fetch(`http://localhost:4000/api/events/${id}/registrations/user/${address.toLowerCase()}`);
+      const response = await fetch(`https://fairpassbackend.vercel.app/api
+/events/${id}/registrations/user/${address.toLowerCase()}`);
       if (response.ok) {
         const data = await response.json();
         
@@ -263,7 +264,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
       try {
         console.log('🔍 Checking registration status for detail page:', { address: address.toLowerCase(), eventId: id });
-        const response = await fetch(`http://localhost:4000/api/events/${id}/registrations/user/${address.toLowerCase()}`);
+        const response = await fetch(`https://fairpassbackend.vercel.app/api
+/events/${id}/registrations/user/${address.toLowerCase()}`);
         console.log('📡 Registration check response for detail page:', { status: response.status, ok: response.ok });
         
         if (response.ok) {
@@ -373,7 +375,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       console.log('✅ QR uploaded to IPFS:', { qrUrl: qrUpload.url, qrCid: qrUpload.cid });
       
       // Update the registration with QR data
-      const updateResponse = await fetch(`http://localhost:4000/api/events/${id}/registrations/${mySub.id}`, {
+      const updateResponse = await fetch(`https://fairpassbackend.vercel.app/api
+/events/${id}/registrations/${mySub.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -388,7 +391,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       if (updateResponse.ok) {
         console.log('✅ QR data updated successfully');
         // Reload registration status
-        const response = await fetch(`http://localhost:4000/api/events/${id}/registrations/user/${address.toLowerCase()}`);
+        const response = await fetch(`https://fairpassbackend.vercel.app/api
+/events/${id}/registrations/user/${address.toLowerCase()}`);
         if (response.ok) {
           const data = await response.json();
           const submission: Submission = {
