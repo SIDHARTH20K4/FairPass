@@ -91,11 +91,3 @@ Manages multiple events and revenue logic.
 - Sonic gas refund → **90% of gas fees back to contract owner**  
 
 ---
-
-## 📊 Ticket Lifecycle
-```mermaid
-flowchart LR
-    A[Mint Ticket] --> B[Buy Ticket]
-    B --> C[Resell/Transfer]
-    C --> D[Event Check-in]
-    D --> E[Burn Ticket]
