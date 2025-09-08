@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, usePublicClient } from 'wagmi';
 import { createEventHooks } from '../../web3/implementationConnections';
+import { eventImplementationABI } from '../../web3/constants';
 import jsQR from 'jsqr';
 
 interface QRScannerProps {
@@ -40,6 +41,7 @@ export default function QRScanner({
   const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const { address } = useAccount();
+  const publicClient = usePublicClient();
   const eventHooks = createEventHooks(eventContractAddress);
   const { checkIn, isPending: isCheckInPending, error: checkInError } = eventHooks?.useCheckIn() || {};
 
@@ -205,8 +207,7 @@ export default function QRScanner({
       setIsProcessingCheckIn(true);
       setError(null);
       
-      // For Semaphore-based tickets, we need to handle differently
-      // For legacy tickets, we can use the participant address to find the token
+      // Find the correct token ID for the participant
       let tokenId: bigint;
       
       if (scanResult.participantAddress === '0x0000000000000000000000000000000000000000') {
@@ -214,13 +215,120 @@ export default function QRScanner({
         tokenId = BigInt(1);
         console.log('Processing Semaphore-based ticket check-in');
       } else {
-        // Legacy ticket - try to find token ID based on participant address
-        // For now, use a default token ID, but in production you'd query the contract
-        tokenId = BigInt(1);
-        console.log('Processing legacy ticket check-in for:', scanResult.participantAddress);
+        // Legacy ticket - find token ID by checking participant's balance and iterating through tokens
+        console.log('Finding token ID for participant:', scanResult.participantAddress);
+        
+        // Get the ticket NFT contract address first
+        const ticketNFTAddress = await publicClient?.readContract({
+          address: eventContractAddress as `0x${string}`,
+          abi: eventImplementationABI,
+          functionName: 'ticketNFT',
+        });
+        
+        if (!ticketNFTAddress) {
+          throw new Error('Could not get ticket NFT contract address');
+        }
+        
+        // Get participant's balance
+        const balance = await publicClient?.readContract({
+          address: ticketNFTAddress as `0x${string}`,
+          abi: [
+            {
+              "inputs": [{"name": "owner", "type": "address"}],
+              "name": "balanceOf",
+              "outputs": [{"name": "", "type": "uint256"}],
+              "stateMutability": "view",
+              "type": "function"
+            }
+          ],
+          functionName: 'balanceOf',
+          args: [scanResult.participantAddress as `0x${string}`],
+        });
+        
+        if (!balance || Number(balance) === 0) {
+          throw new Error('Participant has no tickets for this event');
+        }
+        
+        // Find the first token ID owned by this participant
+        // This is a simplified approach - in production you'd want to get all tokens
+        const totalSupply = await publicClient?.readContract({
+          address: ticketNFTAddress as `0x${string}`,
+          abi: [
+            {
+              "inputs": [],
+              "name": "totalSupply",
+              "outputs": [{"name": "", "type": "uint256"}],
+              "stateMutability": "view",
+              "type": "function"
+            }
+          ],
+          functionName: 'totalSupply',
+        });
+        
+        if (!totalSupply) {
+          throw new Error('Could not get total supply');
+        }
+        
+        // Search for the participant's token (simplified - check first few tokens)
+        let foundTokenId: bigint | null = null;
+        const maxTokens = Math.min(Number(totalSupply), 100); // Limit search to first 100 tokens
+        
+        for (let i = 1; i <= maxTokens; i++) {
+          try {
+            const owner = await publicClient?.readContract({
+              address: ticketNFTAddress as `0x${string}`,
+              abi: [
+                {
+                  "inputs": [{"name": "tokenId", "type": "uint256"}],
+                  "name": "ownerOf",
+                  "outputs": [{"name": "", "type": "address"}],
+                  "stateMutability": "view",
+                  "type": "function"
+                }
+              ],
+              functionName: 'ownerOf',
+              args: [BigInt(i)],
+            });
+            
+            if (owner === scanResult.participantAddress) {
+              foundTokenId = BigInt(i);
+              break;
+            }
+          } catch (error) {
+            // Token doesn't exist, continue searching
+            continue;
+          }
+        }
+        
+        if (!foundTokenId) {
+          throw new Error('Could not find token ID for participant');
+        }
+        
+        tokenId = foundTokenId;
+        console.log('Found token ID for participant:', tokenId.toString());
       }
       
       console.log('Calling checkIn with tokenId:', tokenId.toString());
+      
+      // Validate token exists before attempting check-in
+      try {
+        const tokenOwner = await publicClient?.readContract({
+          address: eventContractAddress as `0x${string}`,
+          abi: eventImplementationABI,
+          functionName: 'ownerOfNFT',
+          args: [tokenId],
+        });
+        
+        if (!tokenOwner || tokenOwner === '0x0000000000000000000000000000000000000000') {
+          throw new Error(`Token ID ${tokenId.toString()} does not exist or has been burned`);
+        }
+        
+        console.log('Token validation successful, owner:', tokenOwner);
+      } catch (validationError) {
+        console.error('Token validation failed:', validationError);
+        throw new Error(`Invalid token ID ${tokenId.toString()}. Token may not exist or may have been burned.`);
+      }
+      
       await checkIn(tokenId);
       setCheckInSuccess(true);
       

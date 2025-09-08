@@ -823,17 +823,31 @@ https://fairpass.onrender.com/api
                             {/* QR Code */}
                             <div className="flex justify-center">
                               <div className="w-48 h-48 border-2 border-foreground/20 rounded-lg overflow-hidden bg-foreground/5">
-                                {mySub.qrUrl ? (
+                                {mySub?.qrUrl ? (
                                   <img 
                                     src={mySub.qrUrl} 
                                     alt="Event QR Code" 
                                     className="w-full h-full object-contain"
+                                    onError={(e) => {
+                                      console.error('❌ QR code image failed to load:', mySub?.qrUrl);
+                                      e.currentTarget.style.display = 'none';
+                                      e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                    }}
                                   />
-                                ) : (
+                                ) : null}
+                                <div className={`w-full h-full flex items-center justify-center ${mySub?.qrUrl ? 'hidden' : ''}`}>
+                                  <div className="text-center space-y-2">
+                                    <div className="w-8 h-8 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin mx-auto"></div>
+                                    <p className="text-xs text-foreground/60">Loading QR Code...</p>
+                                  </div>
+                                </div>
+                                {!mySub?.qrUrl && (
                                   <div className="w-full h-full flex items-center justify-center">
                                     <div className="text-center space-y-2">
-                                      <div className="w-8 h-8 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin mx-auto"></div>
-                                      <p className="text-xs text-foreground/60">Loading...</p>
+                                      <svg className="w-8 h-8 text-foreground/40 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                      </svg>
+                                      <p className="text-xs text-foreground/60">QR Code not available</p>
                                     </div>
                                   </div>
                                 )}
@@ -872,7 +886,7 @@ https://fairpass.onrender.com/api
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-foreground/70">Participant:</span>
-                                  <span className="font-medium">{mySub.values.name || 'Anonymous'}</span>
+                                  <span className="font-medium">{mySub?.values?.name || 'Anonymous'}</span>
                                 </div>
                                 {event.isPaid && event.price && (
                                   <div className="flex justify-between">
@@ -884,7 +898,7 @@ https://fairpass.onrender.com/api
                                   <span className="text-foreground/70">Status:</span>
                                   <span className="text-green-600 dark:text-green-400 font-medium">✓ Approved</span>
                                 </div>
-                                {mySub.nftTokenId && mySub.nftTokenId !== 'pending' && mySub.nftTokenId !== 'qr-generated' && (
+                                {mySub?.nftTokenId && mySub.nftTokenId !== 'pending' && mySub.nftTokenId !== 'qr-generated' && (
                                   <div className="flex justify-between">
                                     <span className="text-foreground/70">Token ID:</span>
                                     <span className="font-mono text-sm">#{mySub.nftTokenId}</span>
@@ -910,6 +924,52 @@ https://fairpass.onrender.com/api
                                       </svg>
                                     </button>
                                   </div>
+                                </div>
+                              )}
+                              
+                              {/* QR Code Metadata */}
+                              {mySub?.qrCid && (
+                                <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-foreground/70">QR Code CID:</span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-mono text-xs text-foreground/80">
+                                        {mySub?.qrCid?.slice(0, 8)}...{mySub?.qrCid?.slice(-8)}
+                                      </span>
+                                      <button
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(mySub?.qrCid!);
+                                        }}
+                                        className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                                        title="Copy QR CID"
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {mySub?.jsonCid && (
+                                    <div className="flex justify-between items-center mt-2">
+                                      <span className="text-foreground/70">Metadata CID:</span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-mono text-xs text-foreground/80">
+                                          {mySub?.jsonCid?.slice(0, 8)}...{mySub?.jsonCid?.slice(-8)}
+                                        </span>
+                                        <button
+                                          onClick={() => {
+                                            navigator.clipboard.writeText(mySub?.jsonCid!);
+                                          }}
+                                          className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                                          title="Copy Metadata CID"
+                                        >
+                                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                       </div>
@@ -1005,7 +1065,7 @@ https://fairpass.onrender.com/api
                             {/* QR Code */}
                             <div className="flex justify-center">
                               <div className="w-48 h-48 border-2 border-foreground/20 rounded-lg overflow-hidden bg-foreground/5">
-                                {mySub.qrUrl ? (
+                                {mySub?.qrUrl ? (
                                   <img 
                                     src={mySub.qrUrl} 
                                     alt="Event QR Code" 
@@ -1030,7 +1090,7 @@ https://fairpass.onrender.com/api
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-foreground/70">Participant:</span>
-                                <span className="font-medium">{mySub.values.name || 'Anonymous'}</span>
+                                <span className="font-medium">{mySub?.values?.name || 'Anonymous'}</span>
                               </div>
                               {event.blockchainEventAddress && (
                                 <div className="flex justify-between items-center">
