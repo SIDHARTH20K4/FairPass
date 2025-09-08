@@ -1,5 +1,7 @@
 # 🎟️ FairPass – NFT-based Event Ticketing
 
+Demo link : https://youtu.be/c5NRRpHysRg
+
 > Transparent · Secure · Fair
 
 FairPass is a **blockchain-powered ticketing platform** built on the **Sonic Blockchain** that uses **NFTs** to bring fairness, transparency, and security to event ticketing.  
@@ -135,6 +137,7 @@ FairPass leverages the **Sonic blockchain’s fee-sharing model** and mainnet to
 backend/   → Node.js + ZKP service  
 frontend/  → React dApp (UI, wallet integration)  
 web3/      → Solidity contracts (EventManager, EventImplementation, EventTicket)
+
 
 
 
