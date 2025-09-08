@@ -122,10 +122,8 @@ export default function QRScanner({
     // Get image data for QR code detection
     const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
     
-    // Use jsQR library for QR code detection (we'll need to install this)
+    // Use jsQR library for QR code detection
     try {
-      // For now, we'll use a simple approach with manual input
-      // In production, you'd use a library like jsQR
       checkForQRCode(imageData);
     } catch (error) {
       console.error('QR scanning error:', error);
@@ -149,17 +147,42 @@ export default function QRScanner({
   // Process scanned QR data
   const processQRData = (qrData: string) => {
     try {
-      const ticketData: ScannedTicketData = JSON.parse(qrData);
+      console.log('Processing QR data:', qrData);
+      const parsedData = JSON.parse(qrData);
       
-      if (ticketData.type === 'event-ticket') {
+      // Check if it's a Semaphore-based QR code (new format)
+      if (parsedData.commitment && parsedData.eventId) {
+        // Convert Semaphore QR to legacy format for display
+        const ticketData: ScannedTicketData = {
+          eventId: parsedData.eventId,
+          eventName: parsedData.eventName || 'Semaphore Event',
+          participantAddress: parsedData.participantAddress || '0x0000000000000000000000000000000000000000',
+          participantName: 'Anonymous (ZK Protected)',
+          approvalDate: parsedData.approvalDate || new Date().toISOString(),
+          type: 'event-ticket'
+        };
+        
         setScanResult(ticketData);
         stopScanning();
         onScanSuccess?.(ticketData);
+      }
+      // Check if it's a legacy QR code (old format)
+      else if (parsedData.participantAddress && parsedData.eventName) {
+        const ticketData: ScannedTicketData = parsedData;
+        
+        if (ticketData.type === 'event-ticket') {
+          setScanResult(ticketData);
+          stopScanning();
+          onScanSuccess?.(ticketData);
+        } else {
+          throw new Error('Invalid ticket QR code type');
+        }
       } else {
-        throw new Error('Invalid ticket QR code');
+        throw new Error('Unrecognized QR code format');
       }
     } catch (error) {
-      const errorMsg = 'Invalid QR code format';
+      const errorMsg = error instanceof Error ? error.message : 'Invalid QR code format';
+      console.error('QR processing error:', error);
       setError(errorMsg);
       onScanError?.(errorMsg);
     }
@@ -167,7 +190,10 @@ export default function QRScanner({
 
   // Handle check-in for scanned ticket
   const handleCheckInScanned = async () => {
-    if (!scanResult || !checkIn) return;
+    if (!scanResult || !checkIn) {
+      setError('Check-in function not available or no ticket scanned');
+      return;
+    }
 
     // Check if today is the event date
     if (!isEventDate()) {
@@ -177,18 +203,31 @@ export default function QRScanner({
 
     try {
       setIsProcessingCheckIn(true);
+      setError(null);
       
-      // For this demo, we'll use token ID 1
-      // In a real implementation, you'd extract the token ID from the QR data
-      // or look it up based on the participant address
-      const tokenId = BigInt(1);
+      // For Semaphore-based tickets, we need to handle differently
+      // For legacy tickets, we can use the participant address to find the token
+      let tokenId: bigint;
       
-      checkIn(tokenId);
+      if (scanResult.participantAddress === '0x0000000000000000000000000000000000000000') {
+        // Semaphore ticket - use a default token ID or implement Semaphore check-in
+        tokenId = BigInt(1);
+        console.log('Processing Semaphore-based ticket check-in');
+      } else {
+        // Legacy ticket - try to find token ID based on participant address
+        // For now, use a default token ID, but in production you'd query the contract
+        tokenId = BigInt(1);
+        console.log('Processing legacy ticket check-in for:', scanResult.participantAddress);
+      }
+      
+      console.log('Calling checkIn with tokenId:', tokenId.toString());
+      await checkIn(tokenId);
       setCheckInSuccess(true);
       
     } catch (error) {
       console.error('Check-in error:', error);
-      setError('Failed to check in participant');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to check in participant';
+      setError(errorMessage);
     } finally {
       setIsProcessingCheckIn(false);
     }
@@ -391,7 +430,26 @@ export default function QRScanner({
       {/* Error Display */}
       {error && (
         <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-          <p className="text-red-800 dark:text-red-200 text-sm">{error}</p>
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-red-800 dark:text-red-200 text-sm">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Check-in Error Display */}
+      {checkInError && (
+        <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-red-800 dark:text-red-200 text-sm">
+              Check-in failed: {checkInError.message || 'Unknown error'}
+            </p>
+          </div>
         </div>
       )}
     </div>

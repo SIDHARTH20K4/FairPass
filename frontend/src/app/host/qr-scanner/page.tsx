@@ -36,6 +36,7 @@ export default function QRScannerPage() {
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<{id: string, name: string, contractAddress: string, date: string} | null>(null);
 
   const handleQRScan = async (result: any) => {
     setIsValidating(true);
@@ -243,12 +244,53 @@ https://fairpass.onrender.com/api
           {/* Scanner Section */}
           <div className="card p-2.5 lg:p-6">
             <h2 className="text-xs lg:text-lg font-medium mb-2 text-foreground">Scan QR Code</h2>
-            <QRScanner 
-              eventContractAddress="0x0000000000000000000000000000000000000000" // Placeholder - needs actual contract address
-              event={{ name: "QR Scanner Event", date: new Date().toISOString() }}
-              onScanSuccess={handleQRScan}
-              onScanError={handleError}
-            />
+            
+            {/* Event Selection */}
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
+                <strong>Note:</strong> Select an event to enable QR scanning and check-in functionality.
+              </p>
+              <div className="flex items-center gap-2">
+                <select 
+                  value={selectedEvent?.id || ''} 
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      // In a real app, you'd fetch event details from the backend
+                      setSelectedEvent({
+                        id: e.target.value,
+                        name: 'Selected Event',
+                        contractAddress: '0x0000000000000000000000000000000000000000', // Placeholder
+                        date: new Date().toISOString()
+                      });
+                    } else {
+                      setSelectedEvent(null);
+                    }
+                  }}
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700"
+                >
+                  <option value="">Select an event...</option>
+                  <option value="demo-event">Demo Event (Placeholder)</option>
+                </select>
+              </div>
+            </div>
+
+            {selectedEvent ? (
+              <QRScanner 
+                eventContractAddress={selectedEvent.contractAddress}
+                event={{ name: selectedEvent.name, date: selectedEvent.date }}
+                onScanSuccess={handleQRScan}
+                onScanError={handleError}
+              />
+            ) : (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                  </svg>
+                </div>
+                <p className="text-foreground/60">Please select an event to start scanning</p>
+              </div>
+            )}
           </div>
 
           {/* Validation Results Section */}
