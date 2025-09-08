@@ -5,6 +5,7 @@ import { useReadContract, useWriteContract, usePublicClient, useWaitForTransacti
 import { eventTicketABI, eventImplementationABI } from '../../web3/constants';
 import { createEventHooks } from '../../web3/implementationConnections';
 import { parseEther, formatEther } from 'viem';
+import { uploadImageToIPFS, uploadJsonToIPFS } from '@/lib/ipfs';
 
 interface BlockchainNFTTicketProps {
   eventContractAddress: string;
@@ -484,11 +485,16 @@ export default function BlockchainNFTTicket({
       const qrData = encodeURIComponent(JSON.stringify(qrPayload));
       const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${qrData}&format=png&margin=10`;
       
-      // Create metadata for the NFT (similar to registration page)
+      console.log('📤 Uploading QR code image to IPFS...');
+      // Upload QR code image to IPFS
+      const qrImageUpload = await uploadImageToIPFS(qrImageUrl);
+      console.log('✅ QR code image uploaded to IPFS:', qrImageUpload.url);
+      
+      // Create metadata for the NFT
       const metadata = {
         name: `${event.name} - Event Ticket`,
         description: `Official ticket for ${event.name} event`,
-        image: qrImageUrl,
+        image: qrImageUpload.url, // Use IPFS URL instead of direct QR server URL
         attributes: [
           { trait_type: "Event", value: event.name },
           { trait_type: "Type", value: "Event Ticket" },
@@ -497,13 +503,15 @@ export default function BlockchainNFTTicket({
         ]
       };
 
-      // Create a simple metadata URI that the contract can accept
-      // Using a basic string format that includes essential data
-      const metadataURI = `ipfs://${event.id || eventContractAddress}_${userAddress}_${Date.now()}`;
+      console.log('📤 Uploading NFT metadata to IPFS...');
+      // Upload metadata to IPFS
+      const metadataUpload = await uploadJsonToIPFS(metadata);
+      const metadataURI = metadataUpload.url;
+      console.log('✅ NFT metadata uploaded to IPFS:', metadataURI);
       
       console.log('🎨 Minting free NFT ticket for user:', userAddress);
       console.log('📄 Metadata URI:', metadataURI);
-      console.log('🎫 QR Code URL:', qrImageUrl);
+      console.log('🎫 QR Code URL:', qrImageUpload.url);
       console.log('📋 Contract Address:', eventContractAddress);
       console.log('💰 Payment Amount: 0 wei (free event)');
       
@@ -512,7 +520,7 @@ export default function BlockchainNFTTicket({
       
     } catch (error) {
       console.error('❌ Error preparing NFT mint:', error);
-      setMintError('Failed to prepare NFT minting');
+      setMintError(`Failed to prepare NFT minting: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setIsMinting(false);
     }
   };
