@@ -54,6 +54,12 @@ export default function BlockchainNFTTicket({
     resalesRemaining: number;
   } | null>(null);
 
+  // Resale transfer state
+  const [showResaleTransferModal, setShowResaleTransferModal] = useState(false);
+  const [transferToAddress, setTransferToAddress] = useState('');
+  const [transferPrice, setTransferPrice] = useState('');
+  const [transferLoading, setTransferLoading] = useState(false);
+
   const publicClient = usePublicClient();
 
   // Get the NFT contract address from the event contract
@@ -82,6 +88,12 @@ export default function BlockchainNFTTicket({
   const { writeContract: writeResaleContract, data: resaleTxHash, error: resaleError, isPending: resalePending } = useWriteContract();
   const { data: resaleTxReceipt, isLoading: resaleTxLoading } = useWaitForTransactionReceipt({
     hash: resaleTxHash,
+  });
+
+  // Transfer functionality
+  const { writeContract: writeTransferContract, data: transferTxHash, error: transferError, isPending: transferPending } = useWriteContract();
+  const { data: transferTxReceipt, isLoading: transferTxLoading } = useWaitForTransactionReceipt({
+    hash: transferTxHash,
   });
 
   // Read resale info from smart contract (only for non-approval events)
@@ -536,6 +548,24 @@ export default function BlockchainNFTTicket({
     }
   }, [resaleTxReceipt, fetchResaleInfo]);
 
+  // Handle transfer transaction completion
+  useEffect(() => {
+    if (transferTxReceipt && transferTxReceipt.status === 'success') {
+      console.log('✅ Transfer transaction confirmed:', transferTxReceipt);
+      setTransferLoading(false);
+      setShowResaleTransferModal(false);
+      setTransferToAddress('');
+      setTransferPrice('');
+      // Refresh NFT data
+      refreshNFTData();
+      alert('NFT transferred successfully!');
+    } else if (transferTxReceipt && transferTxReceipt.status === 'reverted') {
+      console.error('❌ Transfer transaction failed:', transferTxReceipt);
+      setTransferLoading(false);
+      alert('Transfer failed. Please try again.');
+    }
+  }, [transferTxReceipt, refreshNFTData]);
+
   // Process contract resale info and update local state
   useEffect(() => {
     if (contractResaleInfo) {
@@ -634,6 +664,43 @@ export default function BlockchainNFTTicket({
       console.error('Resale cancellation failed:', error);
       alert('Failed to cancel resale. Please try again.');
       setResaleLoading(false);
+    }
+  };
+
+  // Transfer NFT to another wallet
+  const handleTransferNFT = async () => {
+    if (!ticketNFTAddress || !nftTokenId || !transferToAddress || !transferPrice) {
+      alert('Please fill in all fields');
+      return;
+    }
+
+    // Validate address
+    if (!transferToAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+      alert('Please enter a valid wallet address');
+      return;
+    }
+
+    // Validate price
+    const price = parseFloat(transferPrice);
+    if (isNaN(price) || price <= 0) {
+      alert('Please enter a valid price greater than 0');
+      return;
+    }
+
+    setTransferLoading(true);
+    try {
+      // Use transferFrom function from ERC721
+      await writeTransferContract({
+        address: ticketNFTAddress as `0x${string}`,
+        abi: eventTicketABI,
+        functionName: 'transferFrom',
+        args: [userAddress, transferToAddress as `0x${string}`, BigInt(nftTokenId)],
+        value: parseEther(transferPrice), // Send payment with the transfer
+      });
+    } catch (error) {
+      console.error('Transfer failed:', error);
+      alert('Failed to transfer NFT. Please try again.');
+      setTransferLoading(false);
     }
   };
 
@@ -1142,14 +1209,23 @@ export default function BlockchainNFTTicket({
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => setShowResaleModal(true)}
-                      className="w-full btn-secondary text-sm"
-                      title="List this NFT for resale"
-                      disabled={resaleInfo.resalesRemaining === 0}
-                    >
-                      {resaleInfo.resalesRemaining === 0 ? 'Max Resales Reached' : 'List for Resale'}
-                    </button>
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => setShowResaleModal(true)}
+                        className="w-full btn-secondary text-sm"
+                        title="List this NFT for resale"
+                        disabled={resaleInfo.resalesRemaining === 0}
+                      >
+                        {resaleInfo.resalesRemaining === 0 ? 'Max Resales Reached' : 'List for Resale'}
+                      </button>
+                      <button
+                        onClick={() => setShowResaleTransferModal(true)}
+                        className="w-full btn-primary text-sm"
+                        title="Transfer NFT to another wallet"
+                      >
+                        Resale Transfer
+                      </button>
+                    </div>
                   )
                 ) : (
                   <div className="flex-1 text-center text-sm text-foreground/60 py-2 px-3 bg-foreground/5 rounded-lg">
@@ -1254,6 +1330,99 @@ export default function BlockchainNFTTicket({
                     </div>
                   ) : (
                     'List for Resale'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Resale Transfer Modal */}
+      {showResaleTransferModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background border border-border rounded-lg p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-foreground">Transfer NFT</h3>
+              <button
+                onClick={() => {
+                  setShowResaleTransferModal(false);
+                  setTransferToAddress('');
+                  setTransferPrice('');
+                }}
+                className="text-foreground/60 hover:text-foreground"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  To Wallet Address
+                </label>
+                <input
+                  type="text"
+                  value={transferToAddress}
+                  onChange={(e) => setTransferToAddress(e.target.value)}
+                  placeholder="0x..."
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary font-mono text-sm"
+                />
+                <p className="text-xs text-foreground/60 mt-1">
+                  Enter the recipient's wallet address
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Transfer Price (SONIC)
+                </label>
+                <input
+                  type="number"
+                  value={transferPrice}
+                  onChange={(e) => setTransferPrice(e.target.value)}
+                  placeholder="0.0"
+                  step="0.01"
+                  min="0"
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <p className="text-xs text-foreground/60 mt-1">
+                  Amount to send with the NFT transfer
+                </p>
+              </div>
+
+              {transferError && (
+                <div className="text-xs text-red-500 bg-red-50 dark:bg-red-900/20 p-2 rounded">
+                  Transfer failed: {transferError.message || 'Unknown error'}
+                </div>
+              )}
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowResaleTransferModal(false);
+                    setTransferToAddress('');
+                    setTransferPrice('');
+                  }}
+                  className="btn-secondary flex-1"
+                  disabled={transferLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleTransferNFT}
+                  disabled={!transferToAddress || !transferPrice || transferLoading}
+                  className="btn-primary flex-1"
+                >
+                  {transferLoading ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      Transferring...
+                    </div>
+                  ) : (
+                    'Transfer NFT'
                   )}
                 </button>
               </div>
