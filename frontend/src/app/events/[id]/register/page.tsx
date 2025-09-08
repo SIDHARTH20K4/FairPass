@@ -305,8 +305,46 @@ https://fairpass.onrender.com/api
         // Event is published - use dynamic hook
         console.log('Paying via contract using dynamic hook:', contractAddress);
         
-        // Generate metadata URI for the ticket
-        const metadataURI = `ipfs://${id}_${address}_${Date.now()}`;
+        // Create QR code and upload to IPFS for paid events
+        console.log('🎫 Creating QR code and metadata for paid event...');
+        
+        // Create QR code data
+        const qrPayload = {
+          eventId: id,
+          eventName: event.name,
+          participantAddress: address,
+          participantName: submitted?.values?.name || 'Event Participant',
+          approvalDate: new Date().toISOString(),
+          type: 'event-ticket'
+        };
+        
+        // Create QR code image URL
+        const qrData = encodeURIComponent(JSON.stringify(qrPayload));
+        const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${qrData}&format=png&margin=10`;
+        
+        console.log('📤 Uploading QR code image to IPFS...');
+        // Upload QR code image to IPFS
+        const qrImageUpload = await uploadImageToIPFS(qrImageUrl);
+        console.log('✅ QR code image uploaded to IPFS:', qrImageUpload.url);
+        
+        // Create metadata for the NFT
+        const metadata = {
+          name: `${event.name} - Event Ticket`,
+          description: `Official ticket for ${event.name} event`,
+          image: qrImageUpload.url, // Use IPFS URL
+          attributes: [
+            { trait_type: "Event", value: event.name },
+            { trait_type: "Type", value: "Event Ticket" },
+            { trait_type: "Status", value: "Valid" },
+            { trait_type: "Participant", value: address }
+          ]
+        };
+
+        console.log('📤 Uploading NFT metadata to IPFS...');
+        // Upload metadata to IPFS
+        const metadataUpload = await uploadJsonToIPFS(metadata);
+        const metadataURI = metadataUpload.url;
+        console.log('✅ NFT metadata uploaded to IPFS:', metadataURI);
         
         // Use the dynamic buyTicket hook
         buyTicket(metadataURI, priceInWei);

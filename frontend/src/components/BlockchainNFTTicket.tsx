@@ -132,20 +132,32 @@ export default function BlockchainNFTTicket({
   // Function to fetch NFT metadata from IPFS
   const fetchMetadata = useCallback(async (tokenURI: string): Promise<NFTMetadata | null> => {
     try {
+      console.log('🔍 Fetching NFT metadata from:', tokenURI);
+      
       // Handle IPFS URLs
       const url = tokenURI.startsWith('ipfs://') 
         ? `https://ipfs.io/ipfs/${tokenURI.slice(7)}`
         : tokenURI;
       
+      console.log('🌐 Resolved IPFS URL:', url);
+      
       const response = await fetch(url);
       if (!response.ok) {
-        throw new Error(`Failed to fetch metadata: ${response.statusText}`);
+        throw new Error(`Failed to fetch metadata: ${response.statusText} (${response.status})`);
       }
       
       const metadata = await response.json();
+      console.log('✅ Successfully fetched NFT metadata:', metadata);
+      
+      // Validate that the metadata has the expected structure
+      if (!metadata.name || !metadata.image) {
+        console.warn('⚠️ NFT metadata missing required fields:', metadata);
+      }
+      
       return metadata;
     } catch (error) {
-      console.error('Error fetching NFT metadata:', error);
+      console.error('❌ Error fetching NFT metadata:', error);
+      console.error('❌ Token URI was:', tokenURI);
       return null;
     }
   }, []);
@@ -767,7 +779,17 @@ export default function BlockchainNFTTicket({
             </svg>
           </div>
           <p className="font-medium text-red-600 dark:text-red-400">Error Loading NFT</p>
-          <p className="text-sm text-foreground/70">{error}</p>
+          <p className="text-sm text-foreground/70 mb-2">{error}</p>
+          {error.includes('NFT search timed out') && (
+            <p className="text-xs text-foreground/60">
+              This usually means the NFT was recently minted. Try refreshing or check if the transaction completed.
+            </p>
+          )}
+          {error.includes('Failed to fetch metadata') && (
+            <p className="text-xs text-foreground/60">
+              The NFT metadata couldn't be loaded from IPFS. The QR code image might not be available.
+            </p>
+          )}
           <div className="flex gap-2 justify-center">
             <button 
               onClick={refreshNFTData}
