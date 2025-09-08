@@ -9,7 +9,19 @@ FairPass is a **blockchain-powered ticketing platform** built on the **Sonic Blo
 - ✅ **Privacy at Check-in** → Uses **Zero-Knowledge Proofs (ZKPs)** so users prove ticket validity **without exposing their wallet**  
 - ✅ **Sustainable Fees with Sonic FeeM** → On **Sonic Mainnet**, **90% of gas fees** are refunded back to the smart contract owner, creating a **sustainable revenue model** that rewards both the platform and organizers without overcharging users. **(FeeM is not available on testnet)** 
  
-
+---
+## 🚨 The Problem  
+🎫 Web2 ticketing is broken:  
+- Fake/scalped tickets → fans get cheated.  
+- Organizers lose resale revenue.  
+- Users expose personal info at check-in.  
+---
+## 💡 Our Solution  
+FairPass turns every ticket into an **NFT with built-in ZK privacy**:  
+- Tickets can’t be faked (NFTs are unique).  
+- Resale rules are enforced on-chain.  
+- At check-in, you prove ownership via **ZK proof** → without revealing wallet.  
+- Sonic’s **FeeM** refunds 90% of gas → organizers earn more, users pay less.
 ---
 
 ## 📑 Table of Contents
@@ -107,38 +119,19 @@ FairPass leverages the **Sonic blockchain’s fee-sharing model** and mainnet to
 5. If resold, resale fees distributed to platform + organizer  
 
 ---
+##🌍 Why Sonic + Hackathon Fit
+
+FeeM gas refund → sustainable incentive model
+
+ZK privacy → innovative check-in UX
+
+NFT tickets → transparent + fair resale
+---
 
 ## 📂 Project Structure
 
 ```bash
+backend/   → Node.js + ZKP service  
+frontend/  → React dApp (UI, wallet integration)  
+web3/      → Solidity contracts (EventManager, EventImplementation, EventTicket)
 
-├── README.md
-├── backend
-│   ├── FairPassZKP.ts
-│   ├── README.md
-│   ├── src
-│   │   ├── config/
-│   │   ├── middleware/
-│   │   ├── models/
-│   │   ├── routes/
-│   │   ├── server.ts
-│   │   ├── services/
-│   │   └── types/
-├── frontend
-│   ├── README.md
-│   ├── src
-│   │   ├── Services/
-│   │   ├── app/
-│   │   ├── components/
-│   │   ├── config/
-│   │   ├── hooks/
-│   │   ├── lib/
-│   │   └── models/
-│   └── web3
-│       ├── constants.ts
-│       ├── factoryConnections.ts
-│       └── implementationConnections.ts
-└── web3
-    ├── EventFactory.sol
-    ├── EventImplementation.sol
-    ├── EventTicket.sol
