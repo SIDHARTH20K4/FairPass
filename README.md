@@ -1,6 +1,6 @@
 # 🎟️ FairPass – NFT-based Event Ticketing
 
-Demo link : https://youtu.be/c5NRRpHysRg
+Demo Video link : https://youtu.be/c5NRRpHysRg
 
 > Transparent · Secure · Fair
 
@@ -145,6 +145,7 @@ web3/      → Solidity contracts (EventManager, EventImplementation, EventTicke
 1. Fabio Mughilan
 2. Siddarth
 ---
+
 
 
 
