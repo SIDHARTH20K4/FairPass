@@ -570,13 +570,21 @@ https://fairpass.onrender.com/api
 
       // Mint the NFT using the appropriate function based on event type
       if (event.isPaid && event.price) {
-        // For paid events, use buyTicket with payment
-        console.log('🎨 Minting paid NFT via buyTicket hook...');
+        // For paid events (with or without approval), use buyTicket with payment
+        if (event.approvalNeeded) {
+          console.log('🎨 Minting paid + approval NFT via buyTicket hook...');
+        } else {
+          console.log('🎨 Minting paid NFT via buyTicket hook...');
+        }
         const priceInWei = parseEther(event.price.toString());
         buyTicket(metadataURI, priceInWei);
       } else {
-        // For free events, use buyTicket with 0 payment
-        console.log('🎨 Minting free NFT via buyTicket hook...');
+        // For free events (with or without approval), use buyTicket with 0 payment
+        if (event.approvalNeeded) {
+          console.log('🎨 Minting free + approval NFT via buyTicket hook...');
+        } else {
+          console.log('🎨 Minting free NFT via buyTicket hook...');
+        }
         buyTicket(metadataURI, BigInt(0));
       }
 
@@ -802,13 +810,22 @@ https://fairpass.onrender.com/api
           };
           setSubmitted(updatedSubmission);
           
-          // If this is a paid event and user was just approved, trigger payment flow
+          // Handle different event types after approval
           if (event?.isPaid && event?.price && !paymentReceipt) {
-            console.log('🎉 Registration approved for paid event - triggering payment flow');
+            // For paid events (with or without approval), trigger payment flow
+            if (event?.approvalNeeded) {
+              console.log('🎉 Registration approved for paid + approval event - triggering payment flow');
+            } else {
+              console.log('🎉 Registration approved for paid event - triggering payment flow');
+            }
             setPaymentStep('payment');
           } else if (!event?.isPaid) {
-            // For free events, show mint button after approval
-            console.log('🎉 Registration approved for free event - showing mint button');
+            // For free events (with or without approval), show mint button after approval
+            if (event?.approvalNeeded) {
+              console.log('🎉 Registration approved for free + approval event - showing mint button');
+            } else {
+              console.log('🎉 Registration approved for free event - showing mint button');
+            }
             setPaymentStep('success'); // Show success step with mint button
           }
         }
