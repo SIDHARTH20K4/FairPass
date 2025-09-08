@@ -37,6 +37,8 @@ export default function QRScannerPage() {
   const [isValidating, setIsValidating] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<{id: string, name: string, contractAddress: string, date: string} | null>(null);
+  const [copiedCommitment, setCopiedCommitment] = useState(false);
+  const [copiedEventId, setCopiedEventId] = useState(false);
 
   const handleQRScan = async (result: any) => {
     setIsValidating(true);
@@ -186,6 +188,50 @@ https://fairpass.onrender.com/api
 
   const resetValidation = () => {
     setValidationResult(null);
+    setCopiedCommitment(false);
+    setCopiedEventId(false);
+  };
+
+  const copyCommitment = async () => {
+    if (validationResult?.data?.commitment) {
+      try {
+        await navigator.clipboard.writeText(validationResult.data.commitment);
+        setCopiedCommitment(true);
+        setTimeout(() => setCopiedCommitment(false), 2000); // Reset after 2 seconds
+      } catch (error) {
+        console.error('Failed to copy commitment:', error);
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = validationResult.data.commitment;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setCopiedCommitment(true);
+        setTimeout(() => setCopiedCommitment(false), 2000);
+      }
+    }
+  };
+
+  const copyEventId = async () => {
+    if (validationResult?.data?.eventId) {
+      try {
+        await navigator.clipboard.writeText(validationResult.data.eventId);
+        setCopiedEventId(true);
+        setTimeout(() => setCopiedEventId(false), 2000); // Reset after 2 seconds
+      } catch (error) {
+        console.error('Failed to copy event ID:', error);
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = validationResult.data.eventId;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setCopiedEventId(true);
+        setTimeout(() => setCopiedEventId(false), 2000);
+      }
+    }
   };
 
   const handleLogout = () => {
@@ -382,15 +428,49 @@ https://fairpass.onrender.com/api
                 <div className="space-y-3">
                   <h3 className="font-semibold text-foreground">Technical Details</h3>
                   <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center">
                       <span className="text-foreground/60">Event ID:</span>
-                      <span className="font-mono text-xs">{validationResult.data.eventId}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs">{validationResult.data.eventId}</span>
+                        <button
+                          onClick={copyEventId}
+                          className="p-1 hover:bg-foreground/10 rounded transition-colors"
+                          title="Copy event ID"
+                        >
+                          {copiedEventId ? (
+                            <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <svg className="w-3 h-3 text-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center">
                       <span className="text-foreground/60">Commitment:</span>
-                      <span className="font-mono text-xs">
-                        {validationResult.data.commitment.slice(0, 8)}...{validationResult.data.commitment.slice(-8)}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs">
+                          {validationResult.data.commitment.slice(0, 8)}...{validationResult.data.commitment.slice(-8)}
+                        </span>
+                        <button
+                          onClick={copyCommitment}
+                          className="p-1 hover:bg-foreground/10 rounded transition-colors"
+                          title="Copy full commitment"
+                        >
+                          {copiedCommitment ? (
+                            <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <svg className="w-3 h-3 text-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-foreground/60">Type:</span>
