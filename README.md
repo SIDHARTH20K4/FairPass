@@ -4,7 +4,7 @@ Demo Video link : https://youtu.be/c5NRRpHysRg
 
 > Transparent · Secure · Fair
 
-FairPass is a **blockchain-powered ticketing platform** built on the **Sonic Blockchain** that uses **NFTs** to bring fairness, transparency, and security to event ticketing.  
+FairPass is a **blockchain-powered ticketing platform** built on the **Sonic Blockchain**, utilizing **NFTs** to bring fairness, transparency, and security to event ticketing.  
 
 - ✅ **No Fraud** → Tickets are unique NFTs  
 - ✅ **Fair Resale** → Ownership is transparent on-chain  
@@ -77,7 +77,7 @@ ERC-721 contract for tickets:
 
 ---
 
-### 3. EventManager.sol  
+### 3. EventManager.sol  (0x9016F1b7DA5C91d6479aAF99A8765Cb4ED0668bE)
 Deploys and manages multiple events:  
 - `createEvent(...)` → Deploys new `EventImplementation` contract  
 - `getAllEvents()` → Returns list of deployed events  
@@ -145,6 +145,7 @@ web3/      → Solidity contracts (EventManager, EventImplementation, EventTicke
 1. Fabio Mughilan
 2. Siddarth
 ---
+
 
 
 
