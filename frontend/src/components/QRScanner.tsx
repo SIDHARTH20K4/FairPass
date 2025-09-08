@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { createEventHooks } from '../../web3/implementationConnections';
+import jsQR from 'jsqr';
 
 interface QRScannerProps {
   eventContractAddress: string;
@@ -131,10 +132,18 @@ export default function QRScanner({
     }
   };
 
-  // Check for QR code in image data (simplified version)
+  // Check for QR code in image data using jsQR
   const checkForQRCode = (imageData: ImageData) => {
-    // This is a placeholder - in a real implementation, you'd use jsQR or similar
-    // For now, we'll provide a manual input option
+    try {
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      
+      if (code) {
+        console.log('QR Code detected:', code.data);
+        processQRData(code.data);
+      }
+    } catch (error) {
+      console.error('QR detection error:', error);
+    }
   };
 
   // Process scanned QR data
