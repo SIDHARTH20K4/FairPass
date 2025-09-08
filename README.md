@@ -142,7 +142,3 @@ FairPass leverages the **Sonic blockchain’s fee-sharing model** and mainnet to
     ├── EventFactory.sol
     ├── EventImplementation.sol
     ├── EventTicket.sol
-
-
-
----
