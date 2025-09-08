@@ -2,72 +2,93 @@
 
 > Transparent · Secure · Fair
 
----
+FairPass is a **blockchain-powered ticketing platform** built on the **Sonic Blockchain** that uses **NFTs** to bring fairness, transparency, and security to event ticketing.  
 
-## 📌 Overview
-FairPass is a blockchain-based ticketing system using NFTs to ensure **fair resale, transparent ownership, and fraud prevention**.  
-
-The system leverages **Zero-Knowledge Proofs (ZKPs)** during event check-in to validate ticket holders **without exposing sensitive wallet information**.
-
-**Core Contracts**
-1. **EventImplementation.sol** → Manages each event (buying, check-in, ZK validation)  
-2. **EventTicket.sol** → ERC-721 NFT contract representing tickets  
-3. **EventManager.sol** → Deploys/manages events and handles fee-sharing  
+- ✅ **No Fraud** → Tickets are unique NFTs  
+- ✅ **Fair Resale** → Ownership is transparent on-chain  
+- ✅ **Privacy at Check-in** → Uses **Zero-Knowledge Proofs (ZKPs)** so users prove ticket validity **without exposing their wallet**  
 
 ---
 
-## 🏗️ EventImplementation.sol
-Handles event-specific logic.
+## 📑 Table of Contents
+1. [Tech Stack](#-tech-stack)  
+2. [Core Smart Contracts](#-core-smart-contracts)  
+   - [EventImplementation.sol](#1-eventimplementationsol)  
+   - [EventTicket.sol](#2-eventticketsol)  
+   - [EventManager.sol](#3-eventmanagersol)  
+3. [Fee & Incentive Model](#-fee--incentive-model)  
+4. [Ticket Lifecycle](#-ticket-lifecycle)  
+5. [Example Flow](#-example-flow)  
 
-**Functions**
+---
+
+## 🛠 Tech Stack
+- **Blockchain**: Sonic  
+- **Smart Contracts**: Solidity, Foundry  
+- **Tickets (NFTs)**: ERC-721  
+- **Privacy**: Zero-Knowledge Proofs (semaphore.js)  
+- **Frontend**: React  
+- **Backend**: Node.js, Express  
+- **Wallet Integration**: Rainbow-Kit  
+
+---
+
+## 🔑 Core Smart Contracts  
+
+### 1. EventImplementation.sol  
+Handles event-specific logic:  
 - `constructor()` → Initializes event (name, type, price, organizer, platform)  
 - `buyTicket(string metadataURI)` → Users purchase tickets, NFT minted  
-- `mintForUser(address user, string metadataURI)` → Organizer mints tickets (batch/lazy minting)  
-- `checkIn(uint256 tokenId, ZKProof proof)` →  
-  - Verifies ownership with **ZK proof**  
-  - Burns ticket after check-in to prevent reuse  
+- `mintForUser(address user, string metadataURI)` → Organizer batch/lazy mints tickets  
+- `checkIn(uint256 tokenId, ZKProof proof)` → Validates ZK proof & burns ticket after check-in  
 - `ownerOfNFT(uint256 tokenId)` → Returns NFT owner  
 - `registerMe()` → Organizer registration  
-- Ownership → `owner()`, `transferOwnership()`, `renounceOwnership()`  
+- Ownership management → `owner()`, `transferOwnership()`, `renounceOwnership()`  
 
 ✅ **ZK Integration** → Prevents fraud (e.g., screenshot reuse of tickets)  
 
 ---
 
-## 🎟️ EventTicket.sol
-ERC-721 contract for tickets.
-
-**Functions**
+### 2. EventTicket.sol  
+ERC-721 contract for tickets:  
 - `mint(address to, string metadataURI)` → Mints NFT ticket  
 - `burn(uint256 tokenId)` → Burns ticket (used after check-in)  
 - `ownerOf(uint256 tokenId)` → Returns ticket owner  
 - `tokenURI(uint256 tokenId)` → Metadata (IPFS link)  
-- ERC-721 transfers supported → `transferFrom`, `safeTransferFrom`  
+- Standard ERC-721 transfers → `transferFrom`, `safeTransferFrom`  
 
 ✅ **ZK Context** → Tickets verified without exposing wallet  
 
 ---
 
-## 🌐 EventManager.sol
-Deploys and manages multiple events.
-
-**Functions**
+### 3. EventManager.sol  
+Deploys and manages multiple events:  
 - `createEvent(...)` → Deploys new `EventImplementation` contract  
-- `getAllEvents()` → Returns list of all event contracts  
+- `getAllEvents()` → Returns list of deployed events  
 - `getEventDetails(eventAddress)` → Fetch event details  
-
-**Fee Model**
-- Ticket sales → 100% to organizer  
-- Resale fee → Revenue share between platform + organizer  
-- Sonic gas refund → **90% of gas fees returned to contract owner**  
 
 ✅ **ZK Enforced** → All events require ZK proof at check-in  
 
 ---
 
+## 💰 Fee & Incentive Model  
+
+FairPass leverages the **Sonic blockchain’s fee-sharing model** and mainnet token rewards:  
+
+| Revenue Source            | Organizer | Platform (FairPass) |
+|----------------------------|-----------|----------------------|
+| Ticket Sales               | 100%      | 0%                   |
+| Resale Fees                | Shared    | Shared               |
+| Gas Refunds (Sonic)        | Shared    | Shared (90% of fees returned) |
+| Mainnet Token Rewards      | ✅ Earn tokens per transaction | ❌ |
+
+👉 This creates a **sustainable revenue stream** while ensuring fair costs for users.  
+
+---
+
 ## 🔄 Ticket Lifecycle
 1. **Mint/Buy** → NFT ticket minted to user  
-2. **Resell/Transfer** → Allowed, with enforced platform fee  
+2. **Resell/Transfer** → Allowed with enforced platform fee  
 3. **Check-In (ZK proof)** → Proof generated → verified on-chain → ticket burned  
 4. **Completion** → Ticket cannot be reused  
 
@@ -82,12 +103,5 @@ Deploys and manages multiple events.
    - Calls `checkIn(tokenId, proof)`  
    - Proof verified → ticket burned  
 5. If resold, resale fees distributed to platform + organizer  
-
----
-
-## 💰 Monetization
-- Ticket sales → 100% to organizer  
-- Resale fee → Platform + organizer share  
-- Sonic gas refund → **90% of gas fees back to contract owner**  
 
 ---
