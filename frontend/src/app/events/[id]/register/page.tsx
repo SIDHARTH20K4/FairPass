@@ -72,7 +72,6 @@ export default function RegisterForEvent({ params }: { params: Promise<{ id: str
   const [nftError, setNftError] = useState<string | null>(null);
   const [nftContractAddress, setNftContractAddress] = useState<string | null>(null);
   const [pendingQrUrl, setPendingQrUrl] = useState<string | null>(null); // Store QR URL for saving after mint
-  const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
   const [pendingTokenId, setPendingTokenId] = useState<string | null>(null); // Store token ID for saving after mint
   
   // Handle URL parameters for payment step
@@ -395,19 +394,10 @@ https://fairpass.onrender.com/api
       setPaymentStep('success');
       console.log('✅ Payment confirmed - setting payment step to success');
       
-      // For Paid + Approval events, redirect to event page after successful payment
-      if (event?.isPaid && event?.approvalNeeded) {
-        console.log('🎉 Paid + Approval event payment successful - redirecting to event page');
-        // Wait a moment for the success state to show, then redirect
-        setTimeout(() => {
-          window.location.href = `/events/${id}`;
-        }, 2000); // 2 second delay to show success message
-      } else {
-        // Proceed with registration after successful payment for other event types
-        proceedWithRegistration();
-      }
+      // Proceed with registration after successful payment for all event types
+      proceedWithRegistration();
     }
-  }, [isPaymentConfirmed, paymentHash, buyTicketHash, event?.isPaid, event?.approvalNeeded, id]);
+  }, [isPaymentConfirmed, paymentHash, buyTicketHash]);
 
   // Proceed with registration after payment
   async function proceedWithRegistration() {
@@ -1077,20 +1067,19 @@ https://fairpass.onrender.com/api
                 <h3 className="text-lg font-semibold text-green-600">Payment Successful!</h3>
                 <p className="text-sm text-foreground/70">
                   {event?.approvalNeeded ? 
-                    'Your payment has been confirmed! Redirecting to event page to view your NFT ticket...' :
+                    'Your payment has been confirmed! You can now view your NFT ticket on the event page.' :
                     'Your payment has been confirmed. You can now mint your NFT QR ticket.'
                   }
                 </p>
                 {event?.approvalNeeded && (
                   <div className="space-y-3">
-                    <div className="flex items-center justify-center gap-2 text-blue-600">
-                      <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                      <span className="text-sm">Redirecting...</span>
-                    </div>
                     <button
                       onClick={() => window.location.href = `/events/${id}`}
-                      className="btn-primary text-sm"
+                      className="btn-primary text-sm px-4 py-2 flex items-center gap-2"
                     >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
                       View Event Page
                     </button>
                   </div>
