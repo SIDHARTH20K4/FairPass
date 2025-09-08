@@ -137,6 +137,14 @@ FairPass leverages the **Sonic blockchain’s fee-sharing model** and mainnet to
 backend/   → Node.js + ZKP service  
 frontend/  → React dApp (UI, wallet integration)  
 web3/      → Solidity contracts (EventManager, EventImplementation, EventTicket)
+```
+
+---
+## Contributors
+
+1. Fabio Mughilan
+2. Siddarth
+---
 
 
 
