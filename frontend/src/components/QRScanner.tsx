@@ -23,6 +23,7 @@ interface ScannedTicketData {
   participantName: string;
   approvalDate: string;
   type: string;
+  commitmentId?: string;
 }
 
 export default function QRScanner({ 
@@ -36,6 +37,7 @@ export default function QRScanner({
   const [error, setError] = useState<string | null>(null);
   const [isProcessingCheckIn, setIsProcessingCheckIn] = useState(false);
   const [checkInSuccess, setCheckInSuccess] = useState(false);
+  const [copiedCommitment, setCopiedCommitment] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -161,7 +163,8 @@ export default function QRScanner({
           participantAddress: parsedData.participantAddress || '0x0000000000000000000000000000000000000000',
           participantName: 'Anonymous (ZK Protected)',
           approvalDate: parsedData.approvalDate || new Date().toISOString(),
-          type: 'event-ticket'
+          type: 'event-ticket',
+          commitmentId: parsedData.commitment
         };
         
         setScanResult(ticketData);
@@ -458,6 +461,39 @@ export default function QRScanner({
                   {scanResult.participantAddress.slice(0, 6)}...{scanResult.participantAddress.slice(-4)}
                 </span>
               </div>
+              {scanResult.commitmentId && (
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 dark:text-gray-400">Commitment ID:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+                      {scanResult.commitmentId.slice(0, 8)}...{scanResult.commitmentId.slice(-8)}
+                    </span>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(scanResult.commitmentId!);
+                          setCopiedCommitment(true);
+                          setTimeout(() => setCopiedCommitment(false), 2000);
+                        } catch (err) {
+                          console.error('Failed to copy commitment ID:', err);
+                        }
+                      }}
+                      className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                      title="Copy Commitment ID"
+                    >
+                      {copiedCommitment ? (
+                        <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
