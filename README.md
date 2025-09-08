@@ -121,11 +121,11 @@ FairPass leverages the **Sonic blockchain’s fee-sharing model** and mainnet to
 ---
 ## 🌍 Why Sonic + Hackathon Fit
 
-FeeM gas refund → sustainable incentive model
+1. FeeM gas refund → sustainable incentive model
 
-ZK privacy → innovative check-in UX
+2. ZK privacy → innovative check-in UX
 
-NFT tickets → transparent + fair resale
+3. NFT tickets → transparent + fair resale
 
 ---
 
@@ -135,5 +135,6 @@ NFT tickets → transparent + fair resale
 backend/   → Node.js + ZKP service  
 frontend/  → React dApp (UI, wallet integration)  
 web3/      → Solidity contracts (EventManager, EventImplementation, EventTicket)
+
 
 
