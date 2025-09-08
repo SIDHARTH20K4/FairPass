@@ -108,6 +108,7 @@ FairPass leverages the **Sonic blockchain’s fee-sharing model** and mainnet to
 
 ## 📂 Project Structure
 
+```bash
 .
 ├── README.md
 ├── backend
@@ -165,8 +166,6 @@ FairPass leverages the **Sonic blockchain’s fee-sharing model** and mainnet to
     │   └── DeploySonicTestnet.s.sol
     └── tests
         ├── README.md
-        ├── foundry.lock
-        ├── foundry.toml
-        └── lib/
+        ├── foundr
 
 ---
