@@ -575,12 +575,9 @@ https://fairpass.onrender.com/api
         const priceInWei = parseEther(event.price.toString());
         buyTicket(metadataURI, priceInWei);
       } else {
-        // For free events, use mintForUser without payment
-        console.log('🎨 Minting free NFT via mintForUser hook...');
-        if (!address) {
-          throw new Error('Wallet address required for minting');
-        }
-        mintForUser(address, metadataURI);
+        // For free events, use buyTicket with 0 payment
+        console.log('🎨 Minting free NFT via buyTicket hook...');
+        buyTicket(metadataURI, BigInt(0));
       }
 
       console.log('✅ NFT minting transaction submitted via dynamic hook');
