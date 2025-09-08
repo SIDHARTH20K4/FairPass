@@ -7,6 +7,8 @@ FairPass is a **blockchain-powered ticketing platform** built on the **Sonic Blo
 - ✅ **No Fraud** → Tickets are unique NFTs  
 - ✅ **Fair Resale** → Ownership is transparent on-chain  
 - ✅ **Privacy at Check-in** → Uses **Zero-Knowledge Proofs (ZKPs)** so users prove ticket validity **without exposing their wallet**  
+- ✅ **Sustainable Fees with Sonic FeeM** → On **Sonic Mainnet**, **90% of gas fees** are refunded back to the smart contract owner, creating a **sustainable revenue model** that rewards both the platform and organizers without overcharging users. **(FeeM is not available on testnet)** 
+ 
 
 ---
 
