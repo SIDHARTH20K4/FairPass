@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useReadContract, useWriteContract, usePublicClient, useWaitForTransactionReceipt } from 'wagmi';
-import { eventTicketABI } from '../../web3/constants';
+import { eventTicketABI, eventImplementationABI } from '../../web3/constants';
 import { createEventHooks } from '../../web3/implementationConnections';
 import { parseEther, formatEther } from 'viem';
 
@@ -69,8 +69,8 @@ export default function BlockchainNFTTicket({
     query: { enabled: !!checkInHash }
   });
 
-  // Minting functionality for Free + Approval events
-  const { mintForUser, hash: mintHash, isPending: isMintPending, error: mintHookError } = eventHooks?.useMintForUser() || {};
+  // Minting functionality for Free + Approval events (using buyTicket for free events)
+  const { buyTicket: mintTicket, hash: mintHash, isPending: isMintPending, error: mintHookError } = eventHooks?.useBuyTicket() || {};
   
   // Monitor minting transaction
   const { isLoading: isMintTxLoading, isSuccess: isMintTxSuccess } = useWaitForTransactionReceipt({
@@ -103,6 +103,16 @@ export default function BlockchainNFTTicket({
     args: [userAddress as `0x${string}`],
     query: {
       enabled: !!(ticketNFTAddress && userAddress),
+    },
+  });
+
+  // Get event type from contract
+  const { data: eventType } = useReadContract({
+    address: eventContractAddress as `0x${string}`,
+    abi: eventImplementationABI,
+    functionName: 'eventType',
+    query: {
+      enabled: !!eventContractAddress,
     },
   });
 
@@ -403,15 +413,43 @@ export default function BlockchainNFTTicket({
   useEffect(() => {
     if (mintHookError) {
       console.error('❌ Minting error:', mintHookError);
-      setMintError(mintHookError.message || 'Failed to mint NFT');
+      let errorMessage = 'Failed to mint NFT';
+      
+      // Provide more specific error messages
+      if (mintHookError.message) {
+        if (mintHookError.message.includes('Internal JSON-RPC error')) {
+          errorMessage = 'Contract error. This event may require organizer approval for minting.';
+        } else if (mintHookError.message.includes('Approval-based: organizer must mint')) {
+          errorMessage = 'This is an approval-based event. Only the organizer can mint tickets.';
+        } else if (mintHookError.message.includes('reverted')) {
+          errorMessage = 'Transaction failed. Please ensure you have the required permissions.';
+        } else if (mintHookError.message.includes('insufficient funds')) {
+          errorMessage = 'Insufficient funds for transaction.';
+        } else {
+          errorMessage = mintHookError.message;
+        }
+      }
+      
+      setMintError(errorMessage);
       setIsMinting(false);
     }
   }, [mintHookError]);
 
   // Function to mint NFT for Free + Approval events
   const handleMintNFT = async () => {
-    if (!mintForUser || !userAddress) {
+    if (!mintTicket || !userAddress) {
       setMintError('Minting not available');
+      return;
+    }
+
+    // Validate required data
+    if (!eventContractAddress) {
+      setMintError('Event contract address not available');
+      return;
+    }
+
+    if (!event?.name) {
+      setMintError('Event name not available');
       return;
     }
 
@@ -447,15 +485,18 @@ export default function BlockchainNFTTicket({
         ]
       };
 
-      // Upload metadata to IPFS (simplified - in production you'd use a proper IPFS service)
-      const metadataURI = `data:application/json;base64,${btoa(JSON.stringify(metadata))}`;
+      // Create a simple metadata URI that the contract can accept
+      // Using a basic string format that includes essential data
+      const metadataURI = `ipfs://${event.id || eventContractAddress}_${userAddress}_${Date.now()}`;
       
-      console.log('🎨 Minting NFT for user:', userAddress);
+      console.log('🎨 Minting free NFT ticket for user:', userAddress);
       console.log('📄 Metadata URI:', metadataURI);
       console.log('🎫 QR Code URL:', qrImageUrl);
+      console.log('📋 Contract Address:', eventContractAddress);
+      console.log('💰 Payment Amount: 0 wei (free event)');
       
-      // Call the mintForUser function
-      mintForUser(userAddress, metadataURI);
+      // Call the buyTicket function for free events (no payment required)
+      mintTicket(metadataURI, BigInt(0)); // For free events, 0 wei payment
       
     } catch (error) {
       console.error('❌ Error preparing NFT mint:', error);
@@ -691,7 +732,8 @@ export default function BlockchainNFTTicket({
     nftTokenId,
     hasMetadata: !!nftMetadata,
     loading,
-    error
+    error,
+    contractEventType: eventType
   });
   
   console.log('🔍 NFT Detection Debug:', {
@@ -748,6 +790,40 @@ export default function BlockchainNFTTicket({
     if (!isPaidEvent && requiresApproval) {
       console.log('🔍 Free + Approval event detected');
       console.log('📊 NFT Status:', { nftTokenId, hasMetadata: !!nftMetadata, metadataName: nftMetadata?.name, nftBalance: nftBalance?.toString() });
+      console.log('📋 Contract Event Type:', eventType);
+      
+      // Check if contract is configured as APPROVAL type (only organizer can mint)
+      if (eventType === 2) { // 2 = APPROVAL in the enum
+        return (
+          <div className="card p-4 text-center">
+            <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/20 rounded-full flex items-center justify-center mx-auto mb-3">
+              <svg className="w-6 h-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <p className="font-medium mb-2">Registration Approved!</p>
+            <p className="text-sm text-foreground/70 mb-4">
+              Your registration has been approved. The organizer will mint your NFT ticket.
+            </p>
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-foreground">
+                Event: {event.name}
+              </div>
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  ⏳ Waiting for organizer to mint your NFT ticket...
+                </p>
+              </div>
+              <button 
+                onClick={refreshNFTData}
+                className="btn-secondary text-sm"
+              >
+                Check Status
+              </button>
+            </div>
+          </div>
+        );
+      }
       
       // If we have NFT data, show the NFT instead of mint button
       if (nftTokenId && nftMetadata && nftMetadata.name) {

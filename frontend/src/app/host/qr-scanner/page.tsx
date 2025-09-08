@@ -37,17 +37,17 @@ export default function QRScannerPage() {
   const [isValidating, setIsValidating] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const handleQRScan = async (qrDataString: string) => {
+  const handleQRScan = async (result: any) => {
     setIsValidating(true);
     setValidationResult(null);
 
     try {
-      // Parse the QR code data
-      const parsedData = JSON.parse(qrDataString);
+      // The QRScanner component already provides parsed data
+      const scannedData = result;
       
       // Check if it's a Semaphore-based QR code (new format)
-      if (parsedData.commitment && parsedData.eventId) {
-        const qrData: QRData = parsedData;
+      if (scannedData.commitment && scannedData.eventId) {
+        const qrData: QRData = scannedData;
         
         // Validate the QR code structure
         if (!qrData.eventId || !qrData.commitment || !qrData.type) {
@@ -117,8 +117,8 @@ https://fairpass.onrender.com/api
         }
       } 
       // Check if it's a legacy QR code (old format)
-      else if (parsedData.participantAddress && parsedData.eventName) {
-        const legacyData: LegacyQRData = parsedData;
+      else if (scannedData.participantAddress && scannedData.eventName) {
+        const legacyData: LegacyQRData = scannedData;
         
         // Validate the legacy QR code structure
         if (!legacyData.eventId || !legacyData.participantAddress || !legacyData.type) {
@@ -236,8 +236,6 @@ https://fairpass.onrender.com/api
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onLogout={handleLogout}
-        onRefresh={handleRefresh}
-        loading={false}
       />
 
       <div className="mx-auto max-w-6xl px-3 pb-6 pt-12 lg:pt-0 lg:px-4 lg:pb-8">
@@ -246,9 +244,10 @@ https://fairpass.onrender.com/api
           <div className="card p-2.5 lg:p-6">
             <h2 className="text-xs lg:text-lg font-medium mb-2 text-foreground">Scan QR Code</h2>
             <QRScanner 
-              onScan={handleQRScan}
-              onError={handleError}
-              className="w-full"
+              eventContractAddress="0x0000000000000000000000000000000000000000" // Placeholder - needs actual contract address
+              event={{ name: "QR Scanner Event", date: new Date().toISOString() }}
+              onScanSuccess={handleQRScan}
+              onScanError={handleError}
             />
           </div>
 
