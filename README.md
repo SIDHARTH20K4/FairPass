@@ -111,15 +111,11 @@ FairPass leverages the **Sonic blockchain’s fee-sharing model** and mainnet to
 ## 📂 Project Structure
 
 ```bash
-.
+
 ├── README.md
 ├── backend
 │   ├── FairPassZKP.ts
 │   ├── README.md
-│   ├── package-lock.json
-│   ├── package.json
-│   ├── scripts
-│   │   └── fix-null-addresses.js
 │   ├── src
 │   │   ├── config/
 │   │   ├── middleware/
@@ -128,23 +124,8 @@ FairPass leverages the **Sonic blockchain’s fee-sharing model** and mainnet to
 │   │   ├── server.ts
 │   │   ├── services/
 │   │   └── types/
-│   └── tsconfig.json
-├── foundry.lock
 ├── frontend
 │   ├── README.md
-│   ├── env.example
-│   ├── eslint.config.mjs
-│   ├── next-env.d.ts
-│   ├── next.config.ts
-│   ├── package-lock.json
-│   ├── package.json
-│   ├── postcss.config.mjs
-│   ├── public
-│   │   ├── file.svg
-│   │   ├── globe.svg
-│   │   ├── next.svg
-│   │   ├── vercel.svg
-│   │   └── window.svg
 │   ├── src
 │   │   ├── Services/
 │   │   ├── app/
@@ -153,7 +134,6 @@ FairPass leverages the **Sonic blockchain’s fee-sharing model** and mainnet to
 │   │   ├── hooks/
 │   │   ├── lib/
 │   │   └── models/
-│   ├── tsconfig.json
 │   └── web3
 │       ├── constants.ts
 │       ├── factoryConnections.ts
@@ -162,12 +142,7 @@ FairPass leverages the **Sonic blockchain’s fee-sharing model** and mainnet to
     ├── EventFactory.sol
     ├── EventImplementation.sol
     ├── EventTicket.sol
-    ├── foundry.toml
-    ├── remappings.txt
-    ├── script
-    │   └── DeploySonicTestnet.s.sol
-    └── tests
-        ├── README.md
-        ├── foundr
+
+
 
 ---
