@@ -15,7 +15,7 @@ import authRoutes from './routes/auth';
 dotenv.config();
 
 const app = express();
-const PORT = process.env["PORT"] || 4000;
+const PORT = process.env["PORT"] ? parseInt(process.env["PORT"], 10) : 4000;
 
 // Connect to MongoDB
 connectDB();
@@ -23,19 +23,67 @@ connectDB();
 // Middleware
 app.use(helmet());
 app.use(morgan('combined'));
-app.use(cors({
-  origin: process.env["CORS_ORIGIN"] || 'http://localhost:3000',
-  credentials: true
-}));
+// CORS configuration
+const corsOptions = {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'https://fairpass.vercel.app',
+      'https://www.fairpass.vercel.app',
+      'https://fairpass.onrender.com'
+    ];
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Health check endpoint
+// Health check endpoints
 app.get('/health', (_req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    environment: process.env['NODE_ENV'] || 'development'
+  });
+});
+
+app.get('/api/health', (_req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env['NODE_ENV'] || 'development',
+    cors_origin: process.env['CORS_ORIGIN'] || 'http://localhost:3000'
+  });
+});
+
+// API info endpoint
+app.get('/api', (_req, res) => {
+  res.json({
+    message: 'FairPass API',
+    version: '1.0.0',
+    endpoints: {
+      events: '/api/events',
+      registrations: '/api/events/:eventId/registrations',
+      organizations: '/api/organizations',
+      auth: '/api/auth'
+    },
+    documentation: 'https://github.com/fabiomughilan/FairPass'
   });
 });
 
@@ -53,10 +101,21 @@ app.use(notFound);
 app.use(errorHandler);
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`🚀 FairPass Backend running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔗 API Base: http://localhost:${PORT}/api`);
+const HOST = process.env['HOST'] || '0.0.0.0';
+const server = app.listen(PORT, HOST, () => {
+  console.log(`🚀 FairPass Backend running on ${HOST}:${PORT}`);
+  console.log(`📊 Health check: http://${HOST}:${PORT}/health`);
+  console.log(`🔗 API Base: http://${HOST}:${PORT}/api`);
+  console.log(`🌍 Environment: ${process.env['NODE_ENV'] || 'development'}`);
+});
+
+// Handle server errors
+server.on('error', (error: any) => {
+  console.error('❌ Server error:', error);
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use`);
+  }
+  process.exit(1);
 });
 
 // Graceful shutdown

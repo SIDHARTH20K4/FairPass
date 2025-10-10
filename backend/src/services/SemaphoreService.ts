@@ -35,7 +35,7 @@ export class SemaphoreService {
   /**
    * Add a commitment to an event group (when user gets approved)
    */
-  static async addCommitmentToGroup(eventId: string, commitment: string): Promise<EventGroup> {
+  static async addCommitmentToGroup(eventId: string, _commitment: string): Promise<EventGroup> {
     return this.createEventGroup(eventId);
   }
 

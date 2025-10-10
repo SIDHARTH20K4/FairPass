@@ -1,11 +1,10 @@
 {
   "name": "fairpass-backend",
   "version": "1.0.0",
-  "main": "dist/server.ts",
-  "type": "module",
+  "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/server.ts",
+    "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

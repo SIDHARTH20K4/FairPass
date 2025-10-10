@@ -35,7 +35,9 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
       try {
         console.log('Fetching registrations for event:', id);
         // Use backend API to get registrations
-        const res = await fetch(`http://localhost:4000/api/events/${id}/registrations`);
+        const res = await fetch(`
+https://fairpass.onrender.com/api
+/events/${id}/registrations`);
         
         console.log('Response status:', res.status);
         console.log('Response headers:', res.headers);
@@ -129,60 +131,83 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
     if (!s) return;
 
     try {
-      // Generate QR code with event and participant information
-      const qrPayload = {
-        eventId: id,
-        eventName: event.name,
-        participantAddress: s.address,
-        participantName: s.values.name || s.values.Name || 'Anonymous',
-        approvalDate: new Date().toISOString(),
-        type: 'event-ticket'
-      };
-      
-      // Create QR code image
-      const qrData = encodeURIComponent(JSON.stringify(qrPayload));
-      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${qrData}&format=png&margin=10`;
-      
-      // Upload QR code to IPFS
-      const qrUpload = await uploadImageToIPFS(qrImageUrl);
-      
-      // Upload QR payload JSON to IPFS
-      const jsonUpload = await uploadJsonToIPFS(qrPayload);
-      
       // Check if submission has backend ID
       if (!s.id) {
         throw new Error('This registration is missing its backend identifier. Please ensure the participant has completed their registration through the proper channels.');
       }
 
+      let updatePayload: any = { status: 'approved' };
+
+      // Only generate QR code for FREE events
+      // Paid events should get QR codes after payment, not after approval
+      if (!event.isPaid) {
+        console.log('🆓 Free event - generating QR code after approval');
+        
+        // Generate QR code with event and participant information
+        const qrPayload = {
+          eventId: id,
+          eventName: event.name,
+          participantAddress: s.address,
+          participantName: s.values.name || s.values.Name || 'Anonymous',
+          approvalDate: new Date().toISOString(),
+          type: 'event-ticket'
+        };
+        
+        // Create QR code image
+        const qrData = encodeURIComponent(JSON.stringify(qrPayload));
+        const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${qrData}&format=png&margin=10`;
+        
+        // Upload QR code to IPFS
+        const qrUpload = await uploadImageToIPFS(qrImageUrl);
+        
+        // Upload QR payload JSON to IPFS
+        const jsonUpload = await uploadJsonToIPFS(qrPayload);
+        
+        // Add QR data to update payload
+        updatePayload.qrCid = qrUpload.cid;
+        updatePayload.qrUrl = qrUpload.url;
+        updatePayload.jsonCid = jsonUpload.cid;
+        updatePayload.jsonUrl = jsonUpload.url;
+      } else {
+        console.log('💰 Paid event - approval only, QR code will be generated after payment');
+      }
+
       // Update submission status in backend
-      const response = await fetch(`http://localhost:4000/api/events/${id}/registrations/${s.id}`, {
+      console.log(`🔄 Updating registration ${s.id} for event ${id}...`);
+      console.log(`📤 Payload:`, updatePayload);
+      
+      const response = await fetch(`
+https://fairpass.onrender.com/api
+/events/${id}/registrations/${s.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 'approved',
-          qrCid: qrUpload.cid,
-          qrUrl: qrUpload.url,
-          jsonCid: jsonUpload.cid,
-          jsonUrl: jsonUpload.url
-        })
+        body: JSON.stringify(updatePayload)
+      }).catch(error => {
+        console.error('❌ Network error during fetch:', error);
+        throw new Error(`Network error: Unable to connect to backend server. Please ensure the backend is running on http://localhost:4000`);
       });
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Backend response error:', response.status, errorText);
+        console.error('❌ Backend response error:', response.status, errorText);
         throw new Error(`Failed to update registration status: ${response.status} - ${errorText}`);
       }
+      
+      console.log('✅ Registration updated successfully');
       
       // Update local state
       const next = subs.map((item, i) => i === index ? { 
         ...item, 
-        status: "approved", 
-        qrUrl: qrUpload.url, 
-        qrCid: qrUpload.cid, 
-        jsonUrl: jsonUpload.url, 
-        jsonCid: jsonUpload.cid 
+        status: "approved",
+        // Only add QR data for free events
+        ...(updatePayload.qrUrl && {
+          qrUrl: updatePayload.qrUrl,
+          qrCid: updatePayload.qrCid,
+          jsonUrl: updatePayload.jsonUrl,
+          jsonCid: updatePayload.jsonCid
+        })
       } : item);
-    setSubs(next);
+      setSubs(next);
       
     } catch (error) {
       console.error('Failed to approve registration:', error);
@@ -201,7 +226,9 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
       }
       
       // Update submission status in backend
-      const response = await fetch(`http://localhost:4000/api/events/${id}/registrations/${s.id}`, {
+      const response = await fetch(`
+https://fairpass.onrender.com/api
+/events/${id}/registrations/${s.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'rejected' })
@@ -293,35 +320,6 @@ export default function ReviewSubmissionsPage({ params }: { params: Promise<{ id
               </div>
               </div>
               
-              {/* QR Code Display for Approved Participants */}
-              {s.status === "approved" && s.qrUrl && (
-                <div className="border-t border-foreground/10 pt-3">
-                  <div className="flex items-center gap-3">
-                    <div className="text-sm font-medium text-foreground">Event Ticket QR Code:</div>
-                    <a 
-                      href={s.qrUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary hover:underline"
-                    >
-                      View Full Size
-                    </a>
-                  </div>
-                  <div className="mt-2 flex items-center gap-4">
-                    <img 
-                      src={s.qrUrl} 
-                      alt="Event Ticket QR Code" 
-                      className="w-24 h-24 border border-foreground/20 rounded-lg"
-                    />
-                    <div className="text-xs text-foreground/70 space-y-1">
-                      <div><strong>Event:</strong> {event.name}</div>
-                      <div><strong>Participant:</strong> {s.values.name || s.values.Name || 'Anonymous'}</div>
-                      <div><strong>Status:</strong> Approved</div>
-                      <div><strong>QR CID:</strong> {s.qrCid}</div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </li>
           ))}
         </ul>

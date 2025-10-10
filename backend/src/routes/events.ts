@@ -5,7 +5,7 @@ import { CreateEventRequest, UpdateEventRequest, EventQuery, EventResponse } fro
 const router = express.Router();
 
 // Get all events
-router.get('/', async (req: Request<{}, {}, {}, EventQuery>, res: Response) => {
+router.get('/', async (req: Request<{}, {}, {}, EventQuery>, res: Response): Promise<void> => {
   try {
     const { location } = req.query;
     let query: any = { status: 'published' };
@@ -31,12 +31,13 @@ router.get('/', async (req: Request<{}, {}, {}, EventQuery>, res: Response) => {
 });
 
 // Get single event by ID
-router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
+router.get('/:id', async (req: Request<{ id: string }>, res: Response): Promise<void> => {
   try {
     const event = await Event.findById(req.params.id).lean();
     
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      res.status(404).json({ error: 'Event not found' });
+      return;
     }
     
     const eventResponse: EventResponse = {
@@ -52,22 +53,44 @@ router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
 });
 
 // Create new event
-router.post('/', async (req: Request<{}, {}, CreateEventRequest>, res: Response) => {
+router.post('/', async (req: Request<{}, {}, CreateEventRequest>, res: Response): Promise<void> => {
   try {
     const eventData = req.body;
     
     // Validate required fields
     if (!eventData.name || !eventData.bannerUrl || !eventData.hostAddress) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      res.status(400).json({ error: 'Missing required fields' });
+      return;
     }
     
     const event = new Event({ ...eventData, status: eventData.status || 'draft' });
     const savedEvent = await event.save();
     
-    const eventResponse: EventResponse = {
-      ...savedEvent.toObject(),
-      id: savedEvent._id.toString()
-    };
+    const eventResponse = {
+      id: (savedEvent._id as any).toString(),
+      name: savedEvent.name,
+      bannerUrl: savedEvent.bannerUrl,
+      bannerCid: savedEvent.bannerCid,
+      isPaid: savedEvent.isPaid,
+      price: savedEvent.price,
+      currency: savedEvent.currency,
+      approvalNeeded: savedEvent.approvalNeeded,
+      allowResale: savedEvent.allowResale,
+      date: savedEvent.date,
+      time: savedEvent.time,
+      location: savedEvent.location,
+      organization: savedEvent.organization,
+      organizationDescription: savedEvent.organizationDescription,
+      eventDescription: savedEvent.eventDescription,
+      lat: savedEvent.lat,
+      lng: savedEvent.lng,
+      hostAddress: savedEvent.hostAddress,
+      status: savedEvent.status,
+      blockchainEventAddress: savedEvent.blockchainEventAddress,
+      useBlockchain: savedEvent.useBlockchain,
+      createdAt: savedEvent.createdAt,
+      updatedAt: savedEvent.updatedAt
+    } as EventResponse;
     
     res.status(201).json(eventResponse);
   } catch (error) {
@@ -77,7 +100,7 @@ router.post('/', async (req: Request<{}, {}, CreateEventRequest>, res: Response)
 });
 
 // Update event
-router.patch('/:id', async (req: Request<{ id: string }, {}, UpdateEventRequest & { status?: 'draft' | 'published' }>, res: Response) => {
+router.patch('/:id', async (req: Request<{ id: string }, {}, UpdateEventRequest & { status?: 'draft' | 'published' }>, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const updateData = req.body;
@@ -89,7 +112,8 @@ router.patch('/:id', async (req: Request<{ id: string }, {}, UpdateEventRequest 
     ).lean();
     
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      res.status(404).json({ error: 'Event not found' });
+      return;
     }
     
     const eventResponse: EventResponse = {
@@ -105,7 +129,7 @@ router.patch('/:id', async (req: Request<{ id: string }, {}, UpdateEventRequest 
 });
 
 // Host: list all events including drafts
-router.get('/host/:address', async (req: Request<{ address: string }, {}, {}, { status?: string }>, res: Response) => {
+router.get('/host/:address', async (req: Request<{ address: string }, {}, {}, { status?: string }>, res: Response): Promise<void> => {
   try {
     const { address } = req.params;
     const { status } = req.query;
@@ -121,13 +145,14 @@ router.get('/host/:address', async (req: Request<{ address: string }, {}, {}, { 
 });
 
 // Delete event
-router.delete('/:id', async (req: Request<{ id: string }>, res: Response) => {
+router.delete('/:id', async (req: Request<{ id: string }>, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const event = await Event.findByIdAndDelete(id);
     
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      res.status(404).json({ error: 'Event not found' });
+      return;
     }
     
     res.json({ message: 'Event deleted successfully' });

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import WalletConnect from "@/components/tickets/WalletConnect";
+import { getApiUrl } from "@/config/api";
 
 export default function HostSigninPage() {
   const router = useRouter();
@@ -14,6 +15,7 @@ export default function HostSigninPage() {
   const [submitting, setSubmitting] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | undefined>();
   const [authMethod, setAuthMethod] = useState<'wallet' | 'email'>('wallet');
+  const [showRegisterOption, setShowRegisterOption] = useState(false);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -39,12 +41,28 @@ export default function HostSigninPage() {
     
     try {
       setSubmitting(true);
-      const success = await signInWithWallet(walletAddress);
-      if (success) {
-        router.push("/host/dashboard");
+      setShowRegisterOption(false);
+      
+      // First check if organization exists
+      const checkResponse = await fetch(getApiUrl('/organizations/check'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: walletAddress }),
+      });
+      
+      if (checkResponse.ok) {
+        // Organization exists, proceed with sign in
+        const success = await signInWithWallet(walletAddress);
+        if (success) {
+          router.push("/host/dashboard");
+        }
+      } else {
+        // Organization doesn't exist, show register option
+        setShowRegisterOption(true);
       }
     } catch (error) {
-      alert("Wallet sign in failed. Please make sure you have an account with this wallet address.");
+      console.error('Wallet sign in error:', error);
+      setShowRegisterOption(true);
     } finally {
       setSubmitting(false);
     }
@@ -90,7 +108,7 @@ export default function HostSigninPage() {
               onClick={() => setAuthMethod('wallet')}
               className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
                 authMethod === 'wallet'
-                  ? 'bg-foreground text-foreground-foreground'
+                  ? 'bg-foreground'
                   : 'text-foreground/60 hover:text-foreground/80'
               }`}
             >
@@ -100,7 +118,7 @@ export default function HostSigninPage() {
               onClick={() => setAuthMethod('email')}
               className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
                 authMethod === 'email'
-                  ? 'bg-foreground text-foreground-foreground'
+                  ? 'bg-foreground'
                   : 'text-foreground/60 hover:text-foreground/80'
               }`}
             >
@@ -124,20 +142,42 @@ export default function HostSigninPage() {
                   className="w-full"
                 />
                 
-                {walletAddress && (
+                {walletAddress && !showRegisterOption && (
                   <div className="flex items-center gap-2 text-sm text-green-600">
                     <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                     <span>Wallet connected! Signing you in...</span>
                   </div>
                 )}
+                
+                {showRegisterOption && (
+                  <div className="text-center space-y-4">
+                    <div className="flex items-center gap-2 text-sm text-orange-600">
+                      <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                      <span>No organization found with this wallet address</span>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm text-foreground/60">
+                        Would you like to register a new organization?
+                      </p>
+                      <Link 
+                        href="/host/register" 
+                        className="inline-block btn-primary text-sm px-6 py-2"
+                      >
+                        Register New Organization
+                      </Link>
+                    </div>
+                  </div>
+                )}
               </div>
               
-              <div className="text-center text-sm text-foreground/60">
-                <p>Don't have an account with this wallet?</p>
-                <Link href="/host/register" className="text-foreground hover:underline">
-                  Register a new organization
-                </Link>
-              </div>
+              {!showRegisterOption && (
+                <div className="text-center text-sm text-foreground/60">
+                  <p>Don't have an account with this wallet?</p>
+                  <Link href="/host/register" className="text-foreground hover:underline">
+                    Register a new organization
+                  </Link>
+                </div>
+              )}
             </div>
           ) : (
             /* Email-based Sign In */

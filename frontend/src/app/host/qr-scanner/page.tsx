@@ -36,18 +36,21 @@ export default function QRScannerPage() {
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<{id: string, name: string, contractAddress: string, date: string} | null>(null);
+  const [copiedCommitment, setCopiedCommitment] = useState(false);
+  const [copiedEventId, setCopiedEventId] = useState(false);
 
-  const handleQRScan = async (qrDataString: string) => {
+  const handleQRScan = async (result: any) => {
     setIsValidating(true);
     setValidationResult(null);
 
     try {
-      // Parse the QR code data
-      const parsedData = JSON.parse(qrDataString);
+      // The QRScanner component already provides parsed data
+      const scannedData = result;
       
       // Check if it's a Semaphore-based QR code (new format)
-      if (parsedData.commitment && parsedData.eventId) {
-        const qrData: QRData = parsedData;
+      if (scannedData.commitment && scannedData.eventId) {
+        const qrData: QRData = scannedData;
         
         // Validate the QR code structure
         if (!qrData.eventId || !qrData.commitment || !qrData.type) {
@@ -88,7 +91,9 @@ export default function QRScannerPage() {
           // Get event details for better validation result
           let eventName = "Unknown Event";
           try {
-            const eventResponse = await fetch(`http://localhost:4000/api/events/${qrData.eventId}`);
+            const eventResponse = await fetch(`
+https://fairpass.onrender.com/api
+/events/${qrData.eventId}`);
             if (eventResponse.ok) {
               const eventData = await eventResponse.json();
               eventName = eventData.name;
@@ -115,8 +120,8 @@ export default function QRScannerPage() {
         }
       } 
       // Check if it's a legacy QR code (old format)
-      else if (parsedData.participantAddress && parsedData.eventName) {
-        const legacyData: LegacyQRData = parsedData;
+      else if (scannedData.participantAddress && scannedData.eventName) {
+        const legacyData: LegacyQRData = scannedData;
         
         // Validate the legacy QR code structure
         if (!legacyData.eventId || !legacyData.participantAddress || !legacyData.type) {
@@ -183,6 +188,50 @@ export default function QRScannerPage() {
 
   const resetValidation = () => {
     setValidationResult(null);
+    setCopiedCommitment(false);
+    setCopiedEventId(false);
+  };
+
+  const copyCommitment = async () => {
+    if (validationResult?.data?.commitment) {
+      try {
+        await navigator.clipboard.writeText(validationResult.data.commitment);
+        setCopiedCommitment(true);
+        setTimeout(() => setCopiedCommitment(false), 2000); // Reset after 2 seconds
+      } catch (error) {
+        console.error('Failed to copy commitment:', error);
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = validationResult.data.commitment;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setCopiedCommitment(true);
+        setTimeout(() => setCopiedCommitment(false), 2000);
+      }
+    }
+  };
+
+  const copyEventId = async () => {
+    if (validationResult?.data?.eventId) {
+      try {
+        await navigator.clipboard.writeText(validationResult.data.eventId);
+        setCopiedEventId(true);
+        setTimeout(() => setCopiedEventId(false), 2000); // Reset after 2 seconds
+      } catch (error) {
+        console.error('Failed to copy event ID:', error);
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = validationResult.data.eventId;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setCopiedEventId(true);
+        setTimeout(() => setCopiedEventId(false), 2000);
+      }
+    }
   };
 
   const handleLogout = () => {
@@ -234,8 +283,6 @@ export default function QRScannerPage() {
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onLogout={handleLogout}
-        onRefresh={handleRefresh}
-        loading={false}
       />
 
       <div className="mx-auto max-w-6xl px-3 pb-6 pt-12 lg:pt-0 lg:px-4 lg:pb-8">
@@ -243,11 +290,53 @@ export default function QRScannerPage() {
           {/* Scanner Section */}
           <div className="card p-2.5 lg:p-6">
             <h2 className="text-xs lg:text-lg font-medium mb-2 text-foreground">Scan QR Code</h2>
-            <QRScanner 
-              onScan={handleQRScan}
-              onError={handleError}
-              className="w-full"
-            />
+            
+            {/* Event Selection */}
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
+                <strong>Note:</strong> Select an event to enable QR scanning and check-in functionality.
+              </p>
+              <div className="flex items-center gap-2">
+                <select 
+                  value={selectedEvent?.id || ''} 
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      // In a real app, you'd fetch event details from the backend
+                      setSelectedEvent({
+                        id: e.target.value,
+                        name: 'Selected Event',
+                        contractAddress: '0x0000000000000000000000000000000000000000', // Placeholder
+                        date: new Date().toISOString()
+                      });
+                    } else {
+                      setSelectedEvent(null);
+                    }
+                  }}
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700"
+                >
+                  <option value="">Select an event...</option>
+                  <option value="demo-event">Demo Event (Placeholder)</option>
+                </select>
+              </div>
+            </div>
+
+            {selectedEvent ? (
+              <QRScanner 
+                eventContractAddress={selectedEvent.contractAddress}
+                event={{ name: selectedEvent.name, date: selectedEvent.date }}
+                onScanSuccess={handleQRScan}
+                onScanError={handleError}
+              />
+            ) : (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                  </svg>
+                </div>
+                <p className="text-foreground/60">Please select an event to start scanning</p>
+              </div>
+            )}
           </div>
 
           {/* Validation Results Section */}
@@ -339,15 +428,49 @@ export default function QRScannerPage() {
                 <div className="space-y-3">
                   <h3 className="font-semibold text-foreground">Technical Details</h3>
                   <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center">
                       <span className="text-foreground/60">Event ID:</span>
-                      <span className="font-mono text-xs">{validationResult.data.eventId}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs">{validationResult.data.eventId}</span>
+                        <button
+                          onClick={copyEventId}
+                          className="p-1 hover:bg-foreground/10 rounded transition-colors"
+                          title="Copy event ID"
+                        >
+                          {copiedEventId ? (
+                            <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <svg className="w-3 h-3 text-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center">
                       <span className="text-foreground/60">Commitment:</span>
-                      <span className="font-mono text-xs">
-                        {validationResult.data.commitment.slice(0, 8)}...{validationResult.data.commitment.slice(-8)}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs">
+                          {validationResult.data.commitment.slice(0, 8)}...{validationResult.data.commitment.slice(-8)}
+                        </span>
+                        <button
+                          onClick={copyCommitment}
+                          className="p-1 hover:bg-foreground/10 rounded transition-colors"
+                          title="Copy full commitment"
+                        >
+                          {copiedCommitment ? (
+                            <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <svg className="w-3 h-3 text-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-foreground/60">Type:</span>

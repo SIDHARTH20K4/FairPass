@@ -14,6 +14,34 @@ const LOCATIONS = [
   "Singapore","Mumbai","Bengaluru","Delhi","Jakarta","Seoul","Tokyo","Sydney","Taipei","Dubai","London","Paris","Berlin","Lisbon","Amsterdam","San Francisco","New York","Toronto","Austin","Buenos Aires","São Paulo","Cape Town","Nairobi","Worldwide",
 ];
 
+// Location coordinates mapping
+const LOCATION_COORDINATES: { [key: string]: [number, number] } = {
+  "Singapore": [1.3521, 103.8198],
+  "Mumbai": [19.0760, 72.8777],
+  "Bengaluru": [12.9716, 77.5946],
+  "Delhi": [28.6139, 77.2090],
+  "Jakarta": [-6.2088, 106.8456],
+  "Seoul": [37.5665, 126.9780],
+  "Tokyo": [35.6762, 139.6503],
+  "Sydney": [-33.8688, 151.2093],
+  "Taipei": [25.0330, 121.5654],
+  "Dubai": [25.2048, 55.2708],
+  "London": [51.5074, -0.1278],
+  "Paris": [48.8566, 2.3522],
+  "Berlin": [52.5200, 13.4050],
+  "Lisbon": [38.7223, -9.1393],
+  "Amsterdam": [52.3676, 4.9041],
+  "San Francisco": [37.7749, -122.4194],
+  "New York": [40.7128, -74.0060],
+  "Toronto": [43.6532, -79.3832],
+  "Austin": [30.2672, -97.7431],
+  "Buenos Aires": [-34.6118, -58.3960],
+  "São Paulo": [-23.5505, -46.6333],
+  "Cape Town": [-33.9249, 18.4241],
+  "Nairobi": [-1.2921, 36.8219],
+  "Worldwide": [0, 0], // Default center for worldwide
+};
+
 const CURRENCIES = [
   { value: "SONIC", label: "Sonic Tokens", symbol: "SONIC" },
 ];
@@ -28,6 +56,7 @@ export default function CreateEventPage() {
   const [price, setPrice] = useState<string>("");
   const [currency, setCurrency] = useState<string>("SONIC");
   const [approvalNeeded, setApprovalNeeded] = useState(false);
+  const [allowResale, setAllowResale] = useState(true);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [location, setLocation] = useState(LOCATIONS[0]);
@@ -54,6 +83,17 @@ export default function CreateEventPage() {
       setOrganizationDescription(organization.description || "");
     }
   }, [organization]);
+
+  // Redirect to dashboard after event creation
+  useEffect(() => {
+    if (eventCreated) {
+      const timer = setTimeout(() => {
+        router.push('/host/dashboard');
+      }, 2000); // Redirect after 2 seconds to show success message
+
+      return () => clearTimeout(timer);
+    }
+  }, [eventCreated, router]);
 
   const isValid = name && bannerDataUrl && date && time && location;
 
@@ -89,6 +129,7 @@ export default function CreateEventPage() {
         price: isPaid && price ? Number(price) : undefined,
         currency: isPaid ? currency : undefined,
         approvalNeeded,
+        allowResale: !approvalNeeded ? allowResale : false, // Resale only for non-approval events
         date,
         time,
         location,
@@ -147,7 +188,7 @@ export default function CreateEventPage() {
                   Event Created Successfully!
                 </h2>
                 <p className="text-sm text-green-700 dark:text-green-300">
-                  Your event has been saved as a draft. Go to your dashboard to manage and publish it.
+                  Your event has been saved as a draft. Redirecting to dashboard...
                 </p>
               </div>
             </div>
@@ -346,27 +387,28 @@ export default function CreateEventPage() {
                     {LOCATIONS.map((loc) => (
                       <option key={loc} value={loc}>{loc}</option>
                     ))}
-          </select>
-        </div>
+                  </select>
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-3">
-            <SimpleDatePicker value={date} onChange={setDate} label="Event Date" required />
-          </div>
+                    <SimpleDatePicker value={date} onChange={setDate} label="Event Date" required />
+                  </div>
                   <div className="space-y-3">
-            <SimpleTimePicker value={time} onChange={setTime} label="Event Time" required />
-          </div>
-        </div>
+                    <SimpleTimePicker value={time} onChange={setTime} label="Event Time" required />
+                  </div>
+                </div>
 
                 <div className="space-y-3">
                   <label className="block text-lg font-medium text-foreground">
                     Precise Location (Optional)
                   </label>
-        <LocationMap 
-          lat={lat ? Number(lat) : undefined}
-          lng={lng ? Number(lng) : undefined}
-          onLocationChange={(lat, lng) => { setLat(lat.toString()); setLng(lng.toString()); }}
-        />
+                  <LocationMap 
+                    lat={lat ? Number(lat) : undefined}
+                    lng={lng ? Number(lng) : undefined}
+                    selectedLocation={location}
+                    onLocationChange={(lat, lng) => { setLat(lat.toString()); setLng(lng.toString()); }}
+                  />
                 </div>
               </div>
 
@@ -468,6 +510,47 @@ export default function CreateEventPage() {
                     <p className="text-xs text-foreground/60">
                       If enabled, you'll need to manually approve each registration before participants can attend.
                     </p>
+                  </div>
+                  
+                  {/* Resale Settings */}
+                  <div className="space-y-4">
+                    <h4 className="font-medium text-foreground">NFT Ticket Features</h4>
+                    
+                    {/* Resale Option - Only for non-approval events */}
+                    {!approvalNeeded && (
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <input 
+                          type="checkbox" 
+                          checked={allowResale} 
+                          onChange={(e) => setAllowResale(e.target.checked)} 
+                          className="w-4 h-4 text-green-600"
+                        />
+                        <div className="flex-1">
+                          <span className="text-sm font-medium group-hover:text-foreground/80 transition-colors">
+                            Allow ticket resale
+                          </span>
+                          <p className="text-xs text-foreground/60">
+                            Participants can list their NFT tickets for resale (up to 3 times)
+                          </p>
+                        </div>
+                      </label>
+                    )}
+                    
+                    {/* Info for approval events */}
+                    {approvalNeeded && (
+                      <div className="flex items-start gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                        <svg className="w-4 h-4 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div>
+                          <p className="text-xs font-medium text-orange-800 dark:text-orange-200">
+                          </p>
+                          <p className="text-xs text-orange-700 dark:text-orange-300 mt-1">
+                            Only available for FREE and PAID events without approval
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
                                      {/* Pricing Configuration */}

@@ -45,7 +45,7 @@ export default function WalletConnect({ onConnect, onDisconnect, className = "" 
       <div className={`flex items-center gap-3 ${className}`}>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-          <span className="text-sm font-medium text-foreground/80">
+          <span className="text-sm font-medium text-gray-700 dark:text-foreground/80">
             {`${address.slice(0, 6)}...${address.slice(-4)}`}
           </span>
         </div>

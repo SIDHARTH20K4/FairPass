@@ -1,28 +1,10 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+import { API_CONFIG, apiRequest } from '../config/api';
 
 export type ApiEvent = any;
 export type ApiSubmission = any;
 
 async function apiFetch(path: string, init?: RequestInit) {
-  const fullUrl = `${BASE_URL}${path}`;
-  console.log('Making API request to:', fullUrl);
-  
-  const res = await fetch(fullUrl, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
-    cache: "no-store",
-  });
-  
-  if (!res.ok) {
-    const text = await res.text();
-    console.error('API error response:', res.status, text);
-    throw new Error(`API error ${res.status}: ${text}`);
-  }
-  
-  return res.json();
+  return apiRequest(path, init);
 }
 
 // Event endpoints

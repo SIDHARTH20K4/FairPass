@@ -1,15 +1,29 @@
 # 🎟️ FairPass – NFT-based Event Ticketing
 
+Demo Video link : https://youtu.be/c5NRRpHysRg
+
 > Transparent · Secure · Fair
 
-FairPass is a **blockchain-powered ticketing platform** built on the **Sonic Blockchain** that uses **NFTs** to bring fairness, transparency, and security to event ticketing.  
+FairPass is a **blockchain-powered ticketing platform** built on the **Sonic Blockchain**, utilizing **NFTs** to bring fairness, transparency, and security to event ticketing.  
 
 - ✅ **No Fraud** → Tickets are unique NFTs  
 - ✅ **Fair Resale** → Ownership is transparent on-chain  
 - ✅ **Privacy at Check-in** → Uses **Zero-Knowledge Proofs (ZKPs)** so users prove ticket validity **without exposing their wallet**  
-- ✅ **Sustainable Fees with Sonic FeeM** → On **Sonic Mainnet**, **90% of gas fees** are refunded back to the smart contract owner, creating a **sustainable revenue model** that rewards both the platform and organizers without overcharging users. **(FeeM is not available on testnet)** 
+- ✅ **Sonic FeeM** → On **Sonic Mainnet**, **90% of gas fees** are refunded back to the smart contract owner, creating a **sustainable revenue model** that rewards both the platform and organizers without overcharging users. **(FeeM is not available on testnet)** 
  
-
+---
+## 🚨 The Problem  
+🎫 Web2 ticketing is broken:  
+- Fake/scalped tickets → fans get cheated.  
+- Organizers lose resale revenue.  
+- Users expose personal info at check-in.  
+---
+## 💡 Our Solution  
+FairPass turns every ticket into an **NFT with built-in ZK privacy**:  
+- Tickets can’t be faked (NFTs are unique).  
+- Resale rules are enforced on-chain.  
+- At check-in, you prove ownership via **ZK proof** → without revealing wallet.  
+- Sonic’s **FeeM** refunds 90% of gas → organizers earn more, users pay less.
 ---
 
 ## 📑 Table of Contents
@@ -63,7 +77,7 @@ ERC-721 contract for tickets:
 
 ---
 
-### 3. EventManager.sol  
+### 3. EventManager.sol  (0x9016F1b7DA5C91d6479aAF99A8765Cb4ED0668bE)
 Deploys and manages multiple events:  
 - `createEvent(...)` → Deploys new `EventImplementation` contract  
 - `getAllEvents()` → Returns list of deployed events  
@@ -107,67 +121,35 @@ FairPass leverages the **Sonic blockchain’s fee-sharing model** and mainnet to
 5. If resold, resale fees distributed to platform + organizer  
 
 ---
+## 🌍 Why Sonic + Hackathon Fit
+
+1. FeeM gas refund → sustainable incentive model
+
+2. ZK privacy → innovative check-in UX
+
+3. NFT tickets → transparent + fair resale
+
+---
 
 ## 📂 Project Structure
 
 ```bash
-.
-├── README.md
-├── backend
-│   ├── FairPassZKP.ts
-│   ├── README.md
-│   ├── package-lock.json
-│   ├── package.json
-│   ├── scripts
-│   │   └── fix-null-addresses.js
-│   ├── src
-│   │   ├── config/
-│   │   ├── middleware/
-│   │   ├── models/
-│   │   ├── routes/
-│   │   ├── server.ts
-│   │   ├── services/
-│   │   └── types/
-│   └── tsconfig.json
-├── foundry.lock
-├── frontend
-│   ├── README.md
-│   ├── env.example
-│   ├── eslint.config.mjs
-│   ├── next-env.d.ts
-│   ├── next.config.ts
-│   ├── package-lock.json
-│   ├── package.json
-│   ├── postcss.config.mjs
-│   ├── public
-│   │   ├── file.svg
-│   │   ├── globe.svg
-│   │   ├── next.svg
-│   │   ├── vercel.svg
-│   │   └── window.svg
-│   ├── src
-│   │   ├── Services/
-│   │   ├── app/
-│   │   ├── components/
-│   │   ├── config/
-│   │   ├── hooks/
-│   │   ├── lib/
-│   │   └── models/
-│   ├── tsconfig.json
-│   └── web3
-│       ├── constants.ts
-│       ├── factoryConnections.ts
-│       └── implementationConnections.ts
-└── web3
-    ├── EventFactory.sol
-    ├── EventImplementation.sol
-    ├── EventTicket.sol
-    ├── foundry.toml
-    ├── remappings.txt
-    ├── script
-    │   └── DeploySonicTestnet.s.sol
-    └── tests
-        ├── README.md
-        ├── foundr
+backend/   → Node.js + ZKP service  
+frontend/  → React dApp (UI, wallet integration)  
+web3/      → Solidity contracts (EventManager, EventImplementation, EventTicket)
+```
 
 ---
+## Contributors
+
+1. Fabio Mughilan
+2. Siddarth
+---
+
+
+
+
+
+
+
+
